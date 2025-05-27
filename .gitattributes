@@ -1,0 +1,16 @@
+# Always use LF line endings in repo
+* text=auto
+
+# Explicitly set text files to use LF
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.ini text eol=lf
+*.coveragerc text eol=lf
+*.yml text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.mp4 binary

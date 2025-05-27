@@ -1,0 +1,35 @@
+# Bytecode and cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.cache/
+
+# Logs and coverage
+*.log
+.coverage
+htmlcov/
+coverage_html_report/
+
+# Media outputs (images, videos)
+*.mp4
+*.png
+*.jpg
+*.jpeg
+style_transfer_output/
+out/
+
+# Virtual environments
+venv/
+
+# IDE config
+*.iml
+*.idea/
+
+# Testing tools and reports
+.benchmarks/
+.hypothesis/
+googlepylintrc
+
+# External tools and artifacts
+.zencoder/
