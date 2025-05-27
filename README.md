@@ -1,7 +1,7 @@
 # Style Transfer Visualizer
 
 **Version**: 1.0.0  
-**Author**: [Your Name or GitHub Handle]  
+**Author**: [@bjg-gh](https://github.com/bjg-gh)
 **License**: MIT
 
 A powerful and customizable neural style transfer tool implemented in PyTorch. This script allows you to stylize content images using the style of another image and generate a timelapse video and loss plot of the transfer process.
@@ -102,11 +102,11 @@ pytest -m "not slow"
 ├── pytest.ini                      # Pytest configuration
 ├── .coveragerc                     # Coverage configuration
 ├── tests/
-│   ├── test_cli.py
-│   ├── test_core_model.py
-│   ├── test_image_processing.py
-│   ├── test_utils.py
-│   └── test_video_output.py
+    ├── test_cli.py
+    ├── test_core_model.py
+    ├── test_image_processing.py
+    ├── test_utils.py
+    └── test_video_output.py
 ```
 
 ## 📄 License
