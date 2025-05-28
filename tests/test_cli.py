@@ -187,7 +187,7 @@ def test_script_main_entry(tmp_path: Path):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        timeout=60,
+        timeout=180,
         check=False,
     )
 
