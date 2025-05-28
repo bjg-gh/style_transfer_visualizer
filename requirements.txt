@@ -1,5 +1,6 @@
-torch==2.7.0+cu128
-torchvision==0.22.0+cu128
+# Core (CPU-compatible)
+torch==2.7.0
+torchvision==0.22.0
 tqdm==4.67.1
 imageio==2.37.0
 imageio-ffmpeg==0.6.0

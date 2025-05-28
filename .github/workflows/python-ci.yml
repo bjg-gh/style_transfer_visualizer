@@ -2,9 +2,9 @@ name: Python CI
 
 on:
   push:
-    branches: [main]
+    branches: ["*"]
   pull_request:
-    branches: [main]
+    branches: ["*"]
 
 jobs:
   test:
@@ -31,13 +31,21 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest --cov=style_transfer_visualizer --cov-report=term-missing --cov-report=xml
+          pytest
 
-      - name: Upload coverage to GitHub summary
+      - name: Upload coverage summary to GitHub
         if: always()
         run: |
           echo "### Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
           coverage report >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload coverage to Codecov
+        if: success()
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          fail_ci_if_error: true
 
       - name: Archive coverage report
         if: always()
@@ -45,3 +53,4 @@ jobs:
         with:
           name: coverage-report
           path: coverage.xml
+          if-no-files-found: warn

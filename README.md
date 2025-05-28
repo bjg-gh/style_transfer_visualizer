@@ -1,7 +1,9 @@
 # Style Transfer Visualizer
 ![Python CI](https://github.com/bjg-gh/style_transfer_visualizer/actions/workflows/python-ci.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-**Version**: 1.0.0  
+[![codecov](https://codecov.io/gh/bjg-gh/style_transfer_visualizer/branch/ci-test/graph/badge.svg)](https://codecov.io/gh/bjg-gh/style_transfer_visualizer)
+[![GitHub release](https://img.shields.io/github/v/release/bjg-gh/style-transfer-visualizer?sort=semver)](https://github.com/bjg-gh/style-transfer-visualizer/releases)
+
 **Author**: [@bjg-gh](https://github.com/bjg-gh)
 
 A powerful and customizable neural style transfer tool implemented in PyTorch. This script allows you to stylize content images using the style of another image and generate a timelapse video and loss plot of the transfer process.
