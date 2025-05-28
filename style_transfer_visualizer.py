@@ -35,13 +35,15 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
+from __version__ import __version__
+
 # Type aliases for improved readability
 LossMetrics = Dict[str, List[float]]
 TensorList = List[torch.Tensor]
 InitMethod = Literal["content", "random", "white"]
 
 # Constants
-VERSION = "1.0.0"
+VERSION = __version__
 SEED = 0
 
 # Video encoding constants
