@@ -122,12 +122,9 @@ Even as a solo dev, use the PR as a checkpoint:
 
 Use **"Squash and Merge"** for a clean, linear commit history.
 
-This takes the PR title and body as your final commit message:
-```
-docs: fix broken release badge in README
+GitHub will take the PR title and body and turn them into the final commit message. If the PR description includes `Closes #X`, GitHub will automatically close the linked issue after the merge.
 
-Closes #2
-```
+There is no need to add `Closes #X` to the squash commit message manually.
 
 ---
 
