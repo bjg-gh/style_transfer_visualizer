@@ -172,11 +172,9 @@ This issue tracks the version bump, tagging, and release publishing steps for `v
 ## Tasks
 
 - [ ] Review all issues completed in milestone `vX.X.X`
-- [ ] Create a release branch:
-  ```sh
-  git checkout -b release-vX.X.X
-  ```
+- [ ] Create a release branch using this issue
 - [ ] Update `__version__.py` to `X.X.X`
+- [ ] Add release notes to RELEASES.md
 - [ ] Commit with:
   ```sh
   git commit -m "chore: bump version to X.X.X"
