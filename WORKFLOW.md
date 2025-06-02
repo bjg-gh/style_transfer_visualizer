@@ -201,3 +201,38 @@ This issue tracks the version bump, tagging, and release publishing steps for `v
 
 **Milestone:** `vX.X.X`  
 **Labels:** `release`, `chore`
+
+### 🔄 Pre-Release Version Bumps
+
+When beginning work on a new milestone (e.g., `v1.1.0`), update the version in `__version__.py` to reflect that the main branch is no longer identical to the previous release.
+
+**Use semantic pre-release notation** to signal active development:
+
+```python
+__version__ = "1.1.0.dev0"
+```
+
+#### Steps:
+1. Create a GitHub Issue  
+   - Title: `chore: bump version to 1.1.0.dev0`  
+   - Label: `chore`  
+   - Milestone: target version (e.g., `v1.1 – Core Refactor`)
+
+2. Create a branch (e.g., `50-chore-bump-version-1.1.0-dev0`)
+
+3. Update `__version__.py` accordingly
+
+4. Commit with:
+   ```sh
+   git commit -m "chore: bump version to 1.1.0.dev0"
+   ```
+
+5. Open a PR with title:  
+   ```
+   chore: bump version to 1.1.0.dev0
+   ```
+   Include `Closes #<issue-number>` in the PR body
+
+6. Squash and merge  
+7. Delete the branch  
+8. Move the issue to `Done`
