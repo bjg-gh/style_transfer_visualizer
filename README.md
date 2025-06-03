@@ -38,6 +38,8 @@ python style_transfer_visualizer.py --content path/to/content.jpg --style path/t
 python style_transfer_visualizer.py --content cat.jpg --style starry_night.jpg --steps 500 --fps 30 --final-only
 ```
 
+**Note:** Input images must be pre-sized by the user. Minimum dimension: 64px. Processing may be slow for images above 3000px.
+
 ### Options:
 
 | Option              | Description                                                                 |
@@ -51,7 +53,6 @@ python style_transfer_visualizer.py --content cat.jpg --style starry_night.jpg -
 | `--content-w`       | Content loss weight (default: 1.0)                                         |
 | `--lr`              | Learning rate for optimizer (default: 1.0)                                 |
 | `--fps`             | Frames per second for video (default: 10)                                  |
-| `--height`          | Target output height (default: 1080)                                       |
 | `--init-method`     | Initialization: `content`, `random`, or `white` (default: `random`)        |
 | `--no-normalize`    | Disable ImageNet normalization                                             |
 | `--no-video`        | Skip video generation                                                      |
