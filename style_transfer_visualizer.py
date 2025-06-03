@@ -55,7 +55,6 @@ DEFAULT_INIT_METHOD = "random"
 DEFAULT_FPS = 10
 DEFAULT_VIDEO_QUALITY = 10
 VIDEO_CODEC = "libx264"
-ASPECT_RATIO_16_9 = 16 / 9
 ENCODING_BLOCK_SIZE = 16  # Videos are encoded in 16x16 macroblocks
 
 # From torchvision.models.vgg19.
