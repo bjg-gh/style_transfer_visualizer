@@ -88,16 +88,6 @@ class TestLoggerSetup:
 
 
 class TestInputValidation:
-    def test_output_dimensions(self) -> None:
-        """Test video output dimension rounding logic."""
-        width, height = stv.calculate_output_dimensions(
-            target_height=1080,
-            target_aspect_ratio=16 / 9,
-            block_size=16
-        )
-        assert height == 1088
-        assert width == 1920
-
     def test_parameter_validation(self) -> None:
         """Test invalid video quality triggers ValueError."""
         with pytest.raises(ValueError):

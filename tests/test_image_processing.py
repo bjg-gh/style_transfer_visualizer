@@ -2,12 +2,10 @@
 
 Covers:
 - Loading images and error handling
-- Image resizing with padding
 - Tensor transformation and normalization
 - Device compatibility and data integrity
 """
 
-import math
 import tempfile
 from typing import Tuple
 
@@ -15,14 +13,12 @@ from PIL import Image, ImageDraw
 import torch
 from torch import Tensor
 import pytest
-from hypothesis import given, strategies as st, settings
 
 from style_transfer_visualizer import (
     load_image,
     denormalize,
-    padding_preparation_resize,
-    add_padding,
-    apply_transforms
+    apply_transforms,
+    validate_image_dimensions
 )
 
 
@@ -119,117 +115,18 @@ class TestTransforms:
         t = apply_transforms(mixed, normalize=False, device=device)
         assert t.min().item() == 0.0 and t.max().item() == 1.0
 
-    def test_add_padding(self, sample_image: Image.Image):
-        """Test image padding to new dimensions."""
-        padded = add_padding(
-            sample_image, target_width=150, target_height=150
-        )
-        assert padded.size[0] == 150
-        assert padded.size[1] == 150
+class TestImageValidation:
+    def test_valid_dimensions(self, caplog):
+        img = Image.new('RGB', (512, 512))
+        validate_image_dimensions(img)  # Should not raise
 
+    def test_too_small_dimensions(self):
+        img = Image.new('RGB', (32, 100))
+        with pytest.raises(ValueError, match='Image too small'):
+            validate_image_dimensions(img)
 
-class TestImageResizing:
-    @settings(deadline=None)
-    @given(height=st.integers(50, 1000), width=st.integers(50, 1000))
-    def test_resize_preserves_aspect_ratio(self,
-                                           height: int,
-                                           width: int):
-        """Test resize maintains original aspect ratio within tolerance."""
-        img = Image.new("RGB", (width, height))
-        target_height = 400
-        target_width = int(400 * (width / height))
-        resized = padding_preparation_resize(
-            img, target_height, target_width
-        )
-        original_ratio = width / height
-        new_ratio = resized.size[0] / resized.size[1]
-        assert math.isclose(
-            original_ratio, new_ratio, rel_tol=0.02, abs_tol=0.02
-        )
-
-    @pytest.mark.parametrize("target_height", [224, 512, 768])
-    def test_resize_specific_heights(self,
-                                     sample_image: Image.Image,
-                                     target_height: int):
-        """Test resize dimensions match expected height."""
-        orig_w, orig_h = sample_image.size
-        target_width = int(target_height * (orig_w / orig_h))
-        resized = padding_preparation_resize(
-            sample_image, target_height, target_width
-        )
-        assert resized.size[1] == target_height
-
-    def test_resize_with_fixed_dimensions(self):
-        """Test resizing behavior for specific dimensions."""
-        img = Image.new("RGB", (200, 100))
-        target_height = 50
-        target_width = 100
-
-        resized = padding_preparation_resize(
-            img, target_height=target_height, target_width=target_width
-        )
-
-        img_ratio = img.width / img.height
-        target_ratio = target_width / target_height
-
-        if img_ratio > target_ratio:
-            expected_size = (int(target_height * img_ratio), target_height)
-        else:
-            expected_size = (target_width, int(target_width / img_ratio))
-
-        assert resized.size == expected_size
-
-    def test_invalid_input_dimensions(self):
-        """Test resize raises ValueError on invalid image size."""
-        img_zero_width = Image.new("RGB", (0, 100))
-        with pytest.raises(ValueError):
-            padding_preparation_resize(img_zero_width, 100, 100)
-
-        img_zero_height = Image.new("RGB", (100, 0))
-        with pytest.raises(ValueError):
-            padding_preparation_resize(img_zero_height, 100, 100)
-
-    def test_resize_invalid_targets(self):
-        """Test resize raises ValueError on invalid target dimensions."""
-        img = Image.new("RGB", (100, 100))
-        with pytest.raises(ValueError):
-            padding_preparation_resize(img, -1, 100)
-        with pytest.raises(ValueError):
-            padding_preparation_resize(img, 100, -1)
-
-    @given(
-        height=st.integers(min_value=50, max_value=1000),
-        width=st.integers(min_value=50, max_value=1000),
-        target_height=st.integers(min_value=50, max_value=500),
-        target_width=st.integers(min_value=50, max_value=500)
-    )
-    def test_resize_properties(self,
-                               height: int,
-                               width: int,
-                               target_height: int,
-                               target_width: int):
-        """Property-based test for aspect ratio preservation."""
-        from hypothesis import assume
-
-        min_dimension = 50
-        assume(target_height >= min_dimension)
-        assume(target_width >= min_dimension)
-
-        original = Image.new("RGB", (width, height))
-        original_ratio = width / height
-        target_ratio = target_width / target_height
-
-        resized = padding_preparation_resize(
-            original, target_height=target_height,
-            target_width=target_width
-        )
-
-        resized_ratio = resized.size[0] / resized.size[1]
-        tolerance = 0.07  # Looser tolerance for integer rounding
-
-        assert abs(original_ratio - resized_ratio) < tolerance
-
-        if original_ratio > target_ratio:
-            assert resized.size[1] == target_height
-        else:
-            assert resized.size[0] == target_width
+    def test_too_large_dimensions(self, caplog):
+        caplog.set_level('WARNING')
+        img = Image.new('RGB', (4000, 4000))
+        validate_image_dimensions(img)
+        assert 'may slow processing' in caplog.text

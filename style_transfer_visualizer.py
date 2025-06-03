@@ -15,6 +15,10 @@ Key Features:
 Usage:
     python style_transfer_visualizer.py --content <content.jpg> \
         --style <style.jpg> [options]
+
+Note:
+    Input images must be pre-sized by the user. Minimum size: 64px;
+    processing may be slow above 3000px.
 """
 
 import argparse
@@ -50,7 +54,6 @@ SEED = 0
 DEFAULT_INIT_METHOD = "random"
 DEFAULT_FPS = 10
 DEFAULT_VIDEO_QUALITY = 10
-DEFAULT_HEIGHT = 1080
 VIDEO_CODEC = "libx264"
 ASPECT_RATIO_16_9 = 16 / 9
 ENCODING_BLOCK_SIZE = 16  # Videos are encoded in 16x16 macroblocks
@@ -73,6 +76,8 @@ GRAM_MATRIX_CLAMP_MAX = 5e5
 # Image processing constants
 COLOR_MODE_RGB = "RGB"
 COLOR_BLACK = (0, 0, 0)
+MIN_DIMENSION = 64
+MAX_DIMENSION = 3000
 
 # Tensor reshaping constant to broadcast normalization values across image
 # tensor
@@ -152,115 +157,21 @@ def load_image(path: str) -> Image.Image:
         raise IOError(f"Error loading image '{path}': {str(e)}") from e
 
 
-def calculate_output_dimensions(
-        target_height: int,
-        target_aspect_ratio: float = ASPECT_RATIO_16_9,
-        block_size: int = ENCODING_BLOCK_SIZE
-) -> tuple[int, int]:
-    """Calculate output dimensions based on the requested image size.
-
-    Uses a constant aspect ratio to determine width. Ensures dimensions
-    are compatible with video encoding blocks.
+def validate_image_dimensions(img: Image.Image) -> None:
+    """Ensure the image dimensions fall within allowed range.
 
     Args:
-        target_height: Target size (height) in pixels
-        target_aspect_ratio: Target aspect ratio (width/height)
-        block_size: encoding block size
-
-    Returns:
-        Tuple of (output_width, output_height)
-    """
-    # Calculate initial width based on aspect ratio
-    output_width = int(target_height * target_aspect_ratio)
-
-    # Round both dimensions to nearest multiple of block_size
-    output_width = (((output_width + block_size // 2) // block_size)
-                    * block_size)
-    output_height = (((target_height + block_size // 2) // block_size)
-                     * block_size)
-
-    return output_width, output_height
-
-
-def padding_preparation_resize(
-        img: Image.Image,
-        target_width: int,
-        target_height: int,
-        min_dimension: int = 20
-) -> Image.Image:
-    """Resize an image while maintaining its original aspect ratio.
-
-    This function prepares an image for letterboxing or pillarboxing by:
-    - For wide images: resizing to match the target height (letterbox)
-    - For tall images: resizing to match the target width (pillarbox)
-
-    The add_padding function should be called after this to add the
-    actual letterbox/pillarbox.
-
-    Args:
-        img: Input PIL Image
-        target_width: Target width in pixels (must be >= min_dimension)
-        target_height: Target height in pixels (must be >= min_dimension)
-        min_dimension: Minimum allowed dimension size (default: 20 pixels)
-
-    Returns:
-        Resized PIL Image ready for letterboxing/pillarboxing
+        img: PIL Image
 
     Raises:
-        ValueError: If target dimensions are invalid or too small
+        ValueError: If image dimensions are too small or too large
     """
-    # Validate target dimensions
-    if target_width < min_dimension:
-        raise ValueError(f"Target width must be at least {min_dimension}"
-                         f" pixels, got {target_width}")
-    if target_height < min_dimension:
-        raise ValueError(f"Target height must be at least {min_dimension}"
-                         f" pixels, got {target_height}")
-
-    # Validate input image dimensions
-    if img.width <= 0 or img.height <= 0:
-        raise ValueError("Input image has invalid dimensions:"
-                         f" {img.width}x{img.height}")
-
-    # Calculate aspect ratios
-    target_aspect_ratio = target_width / target_height
-    img_ratio = img.width / img.height
-
-    if img_ratio > target_aspect_ratio:
-        # Image is wider than target: resize by height (letterbox)
-        new_height = target_height
-        new_width = int(new_height * img_ratio)
-    else:
-        # Image is taller than or equal to target: resize by width (pillarbox)
-        new_width = target_width
-        new_height = int(new_width / img_ratio)
-
-    return img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-
-
-def add_padding(
-        img: Image.Image,
-        target_width: int,
-        target_height: int,
-        padding_color: tuple = COLOR_BLACK
-) -> Image.Image:
-    """Add black padding (letterboxing or pillarboxing) to an image.
-
-    Args:
-        img: Input PIL Image
-        target_width: Target width in pixels
-        target_height: Target height in pixels
-        padding_color: Color of the padding (default: black)
-
-    Returns:
-        Padded PIL Image
-    """
-    new_img = Image.new(COLOR_MODE_RGB, (target_width, target_height),
-                        padding_color)
-    offset_x = (target_width - img.width) // 2
-    offset_y = (target_height - img.height) // 2
-    new_img.paste(img, (offset_x, offset_y))
-    return new_img
+    if img.width < MIN_DIMENSION or img.height < MIN_DIMENSION:
+        raise ValueError(f"Image too small: {img.width}x{img.height}. "
+                         f"Minimum dimension is {MIN_DIMENSION}px.")
+    if img.width > MAX_DIMENSION or img.height > MAX_DIMENSION:
+        logger.warning("Image is large: %dx%d. This may slow"
+                       " processing.",img.width, img.height)
 
 
 def apply_transforms(
@@ -287,22 +198,18 @@ def apply_transforms(
     return loader(img).unsqueeze(0).to(device)
 
 
-def img_loader(
+def load_image_to_tensor(
         path: str,
-        target_height: int,
         device: torch.device,
         normalize: bool = False
 ) -> torch.Tensor:
     """Load and preprocess an image for style transfer.
 
-    Automatically resizes to 1920x1080 or 3840x2160 (HD/4K) if requested
-    via --height.
-    Adds pillarboxing if the image is narrower than the target aspect
-    ratio.
+    Loads image as-is (no resizing or padding). Validates dimensions
+    and applies optional normalization.
 
     Args:
         path: Path to the image file
-        target_height: Target size (height) in pixels
         device: Device to load the tensor to
         normalize: Whether to apply ImageNet normalization
 
@@ -312,11 +219,10 @@ def img_loader(
     Raises:
         FileNotFoundError: If the image file doesn't exist
         IOError: If the image cannot be opened or processed
+        ValueError: If image dimensions are invalid
     """
     img = load_image(path)
-    output_width, output_height = calculate_output_dimensions(target_height)
-    img = padding_preparation_resize(img, output_width, output_height)
-    img = add_padding(img, output_width, output_height)
+    validate_image_dimensions(img)
     return apply_transforms(img, normalize, device)
 
 
@@ -684,7 +590,6 @@ def log_parameters(args: argparse.Namespace) -> None:
     logger.info("Learning Rate: %g", args.lr)
     logger.info("FPS for Timelapse Video: %d", args.fps)
     logger.info("Video Quality: %d (1–10 scale)", args.quality)
-    logger.info("Image Height: %d", args.height)
     logger.info("Initialization Method: %s", args.init_method)
     logger.info(
         "Normalization: %s",
@@ -996,7 +901,6 @@ def style_transfer(
         content_weight: float = 1,
         learning_rate: float = 1.0,
         fps: int = DEFAULT_FPS,
-        height: int = DEFAULT_HEIGHT,
         device_name: str = "cuda",
         init_method: InitMethod = DEFAULT_INIT_METHOD,
         normalize: bool = True,
@@ -1017,7 +921,6 @@ def style_transfer(
         content_weight: Weight for content loss
         learning_rate: Learning rate for optimizer
         fps: Frames per second for timelapse video
-        height: Target height in pixels
         device_name: Device to run on ("cuda" or "cpu")
         init_method: Method to initialize the input image
         normalize: Whether to use ImageNet normalization
@@ -1028,6 +931,10 @@ def style_transfer(
 
     Returns:
         The final stylized image tensor
+
+    Note:
+        Input images must be pre-sized by the user. Minimum size: 64px;
+        processing may be slow above 3000px.
     """
     # Step 1: Validate inputs and parameters
     validate_input_paths(content_path, style_path)
@@ -1043,11 +950,9 @@ def style_transfer(
     device = setup_device(device_name)
 
     # Step 4: Load and preprocess images
-    target_height = height or DEFAULT_HEIGHT
-    content_img = img_loader(content_path, target_height, device,
-                             normalize=normalize)
-    style_img = img_loader(style_path, target_height, device,
-                           normalize=normalize)
+    content_img = load_image_to_tensor(content_path, device,
+                                       normalize=normalize)
+    style_img = load_image_to_tensor(style_path, device, normalize=normalize)
 
     # Step 5: Initialize model and optimizer
     model, input_img, optimizer = prepare_model_and_input(
@@ -1221,11 +1126,6 @@ Note:
                           help="style image path")
     io_group.add_argument("--output", default="out",
                           help="output directory")
-    io_group.add_argument("--height", type=int,
-                          default=DEFAULT_HEIGHT,
-                          help=f"target height (px); {ASPECT_RATIO_16_9:.1f} "
-                               f"aspect ratio applied if height ≥ "
-                               f"{DEFAULT_HEIGHT}")
 
     # Optimization parameters group
     optim_group = p.add_argument_group("Optimization Parameters")
@@ -1287,7 +1187,6 @@ def run_from_args(args: argparse.Namespace) -> torch.Tensor:
         content_weight=args.content_w,
         learning_rate=args.lr,
         fps=args.fps,
-        height=args.height,
         device_name=args.device,
         init_method=args.init_method,
         normalize=not args.no_normalize,
