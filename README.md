@@ -61,6 +61,43 @@ python style_transfer_visualizer.py --content cat.jpg --style starry_night.jpg -
 | `--device`          | Device to run on: `cpu` or `cuda` (default: `cuda`)                        |
 | `--seed`            | Random seed for reproducibility (default: 0)                               |
 
+### 🗂 Optional: Using a Config File
+
+Instead of passing many CLI arguments, you can store settings in a `config.toml` file:
+
+```bash
+python style_transfer_visualizer.py --content cat.jpg --style mosaic.jpg --config path/to/config.toml
+```
+
+The config file supports the following sections:
+
+```toml
+[output]
+output = "out/"
+
+[optimization]
+steps = 500
+style_w = 1e5
+content_w = 1.0
+lr = 1.0
+init_method = "random"
+seed = 42
+normalize = true
+
+[video]
+save_every = 10
+fps = 30
+quality = 9
+create_video = true
+final_only = false
+
+[hardware]
+device = "cuda"
+```
+
+- Any CLI argument will override its corresponding config value.
+- The config file is optional — default values still apply if it's omitted.
+
 ## 📊 Output
 
 - `stylized_<content>_x_<style>.png`: Final stylized image

@@ -1,0 +1,30 @@
+# ============================================================================
+# Style Transfer Visualizer Configuration File
+#
+# This file contains configurable settings for running the style transfer
+# visualizer.
+#
+# Save this file as config.toml and use:
+#   python style_transfer_visualizer.py --config config.toml
+# ============================================================================
+[output]
+output = "out"
+
+[optimization]
+steps = 300
+style_w = 1000000.0
+content_w = 1.0
+lr = 1.0
+init_method = "random"
+seed = 0
+normalize = true
+
+[video]
+save_every = 20
+fps = 10
+quality = 10
+create_video = true
+final_only = false
+
+[hardware]
+device = "cuda"

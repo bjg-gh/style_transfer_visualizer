@@ -20,9 +20,11 @@ from torch import Tensor
 from torch.optim import Optimizer
 from PIL import Image
 
+from constants import COLOR_MODE_RGB
+
 
 @pytest.fixture
-def device() -> torch.device:
+def test_device() -> torch.device:
     """Provides a PyTorch device (CPU or CUDA if available)."""
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -43,7 +45,7 @@ def output_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def sample_image() -> Image.Image:
     """Creates a sample 100x100 red RGB PIL image."""
-    return Image.new("RGB", (100, 100), color="red")
+    return Image.new(COLOR_MODE_RGB, (100, 100), color="red")
 
 
 @pytest.fixture
@@ -59,7 +61,7 @@ def style_image(test_dir: str) -> str:
     Returns:
         str: Path to the saved image.
     """
-    img = Image.new("RGB", (64, 64), color="blue")
+    img = Image.new(COLOR_MODE_RGB, (64, 64), color="blue")
     path = os.path.join(test_dir, "style.jpg")
     img.save(path)
     return path
@@ -72,7 +74,7 @@ def content_image(test_dir: str) -> str:
     Returns:
         str: Path to the saved image.
     """
-    img = Image.new("RGB", (64, 64), color="green")
+    img = Image.new(COLOR_MODE_RGB, (64, 64), color="green")
     path = os.path.join(test_dir, "content.jpg")
     img.save(path)
     return path
@@ -156,7 +158,7 @@ def video_path(test_dir: str) -> str:
     """Returns the expected path to a test video file.
 
     Note:
-        This does not actually create a video file.
+        This does not create a video file.
     """
     return os.path.join(test_dir, "test_video.mp4")
 
