@@ -22,18 +22,19 @@ def setup_model_and_images(
     content_layers: list[int],
     style_image: str,
     content_image: str,
-    device: torch.device
+    test_device: torch.device
 ) -> Generator[
     Tuple[torch.nn.Module, Tensor, Tensor, Tensor], None, None
 ]:
     """Set up model and image tensors for integration testing."""
     style_img = stv.apply_transforms(
-        stv.load_image(style_image), normalize=True, device=device
+        stv.load_image(style_image), normalize=True, device=test_device
     )
     content_img = stv.apply_transforms(
-        stv.load_image(content_image), normalize=True, device=device
+        stv.load_image(content_image), normalize=True, device=test_device
     )
-    model = stv.StyleContentModel(style_layers, content_layers).to(device)
+    model = stv.StyleContentModel(style_layers,
+                                  content_layers).to(test_device)
     model.set_targets(style_img, content_img)
     input_img = content_img.clone().requires_grad_(True)
     yield model, style_img, content_img, input_img

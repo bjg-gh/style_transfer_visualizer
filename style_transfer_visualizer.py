@@ -22,6 +22,8 @@ Note:
 """
 
 import argparse
+import sys
+
 import imageio
 import time
 import logging
@@ -40,6 +42,36 @@ from PIL import Image
 from tqdm import tqdm
 
 from __version__ import __version__
+from constants import (
+    STYLE_LAYERS,
+    CONTENT_LAYERS,
+    GRAM_MATRIX_CLAMP_MAX,
+    VIDEO_CODEC,
+    IMAGENET_MEAN,
+    IMAGENET_STD,
+    COLOR_MODE_RGB,
+    DENORM_VIEW_SHAPE,
+    ENCODING_BLOCK_SIZE,
+    MIN_DIMENSION,
+    MAX_DIMENSION
+)
+from config_defaults import (
+    DEFAULT_STEPS,
+    DEFAULT_STYLE_WEIGHT,
+    DEFAULT_CONTENT_WEIGHT,
+    DEFAULT_LEARNING_RATE,
+    DEFAULT_INIT_METHOD,
+    DEFAULT_SEED,
+    DEFAULT_NORMALIZE,
+    DEFAULT_SAVE_EVERY,
+    DEFAULT_FPS,
+    DEFAULT_VIDEO_QUALITY,
+    DEFAULT_CREATE_VIDEO,
+    DEFAULT_FINAL_ONLY,
+    DEFAULT_DEVICE,
+    DEFAULT_OUTPUT_DIR,
+)
+from config import ConfigLoader, StyleTransferConfig
 
 # Type aliases for improved readability
 LossMetrics = Dict[str, List[float]]
@@ -48,39 +80,6 @@ InitMethod = Literal["content", "random", "white"]
 
 # Constants
 VERSION = __version__
-SEED = 0
-
-# Video encoding constants
-DEFAULT_INIT_METHOD = "random"
-DEFAULT_FPS = 10
-DEFAULT_VIDEO_QUALITY = 10
-VIDEO_CODEC = "libx264"
-ENCODING_BLOCK_SIZE = 16  # Videos are encoded in 16x16 macroblocks
-
-# From torchvision.models.vgg19.
-# See:
-# https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py
-# https://medium.com/@ferlatti.aldo/neural-style-transfer-nst-theory-and-implementation-c26728cf969d
-STYLE_LAYERS = [0, 5, 10, 19, 28]
-CONTENT_LAYERS = [21]
-
-# Standard ImageNet normalization values used in torchvision.models
-# See: https://pytorch.org/vision/stable/models.html#classification
-IMAGENET_MEAN = [0.485, 0.456, 0.406]
-IMAGENET_STD = [0.229, 0.224, 0.225]
-
-# Numerical stability constants
-GRAM_MATRIX_CLAMP_MAX = 5e5
-
-# Image processing constants
-COLOR_MODE_RGB = "RGB"
-COLOR_BLACK = (0, 0, 0)
-MIN_DIMENSION = 64
-MAX_DIMENSION = 3000
-
-# Tensor reshaping constant to broadcast normalization values across image
-# tensor
-DENORM_VIEW_SHAPE = (1, 3, 1, 1)
 
 
 def setup_logger(
@@ -581,6 +580,8 @@ def log_parameters(args: argparse.Namespace) -> None:
     """
     logger.info("Content image loaded: %s", args.content)
     logger.info("Style image loaded: %s", args.style)
+    if getattr(args, "config", None):
+        logger.info("Loaded config from: %s", args.config)
     logger.info("Output Directory: %s", args.output)
     logger.info("Steps: %d", args.steps)
     logger.info("Save Every: %d", args.save_every)
@@ -893,20 +894,20 @@ def run_optimization_loop(
 def style_transfer(
         content_path: str,
         style_path: str,
-        output_dir: str = "out",
-        steps: int = 300,
-        save_every: int = 20,
-        style_weight: float = 1e6,
-        content_weight: float = 1,
-        learning_rate: float = 1.0,
+        output_dir: str = DEFAULT_OUTPUT_DIR,
+        steps: int = DEFAULT_STEPS,
+        save_every: int = DEFAULT_SAVE_EVERY,
+        style_weight: float = DEFAULT_STYLE_WEIGHT,
+        content_weight: float = DEFAULT_CONTENT_WEIGHT,
+        learning_rate: float = DEFAULT_LEARNING_RATE,
         fps: int = DEFAULT_FPS,
-        device_name: str = "cuda",
-        init_method: InitMethod = DEFAULT_INIT_METHOD,
-        normalize: bool = True,
-        create_video: bool = True,
-        final_only: bool = False,
+        device_name: str = DEFAULT_DEVICE,
+        init_method: str = DEFAULT_INIT_METHOD,
+        normalize: bool = DEFAULT_NORMALIZE,
+        create_video: bool = DEFAULT_CREATE_VIDEO,
+        final_only: bool = DEFAULT_FINAL_ONLY,
         video_quality: int = DEFAULT_VIDEO_QUALITY,
-        seed: int = SEED
+        seed: int = DEFAULT_SEED
 ) -> torch.Tensor:
     """Perform neural style transfer and save outputs.
 
@@ -1113,92 +1114,116 @@ Note:
         # pylint: enable=line-too-long
     )
 
-    # General arguments
-    p.add_argument("--version", action="version",
-                   version=f"%(prog)s {VERSION}")
+    # Required paths
+    required = p.add_argument_group("required arguments")
+    required.add_argument("--content", type=str, help="Path to content image")
+    required.add_argument("--style", type=str, help="Path to style image")
 
-    # Input/Output group
-    io_group = p.add_argument_group("Input/Output Options")
-    io_group.add_argument("--content", required=True,
-                          help="content image path")
-    io_group.add_argument("--style", required=True,
-                          help="style image path")
-    io_group.add_argument("--output", default="out",
-                          help="output directory")
+    # Output
+    output = p.add_argument_group("output")
+    output.add_argument("--output", type=str, default=DEFAULT_OUTPUT_DIR,
+                        help="Output directory")
 
-    # Optimization parameters group
-    optim_group = p.add_argument_group("Optimization Parameters")
-    optim_group.add_argument("--steps", type=int, default=300,
-                             help="number of optimization steps")
-    optim_group.add_argument("--style-w", type=float, default=1e6,
-                             help="style weight")
-    optim_group.add_argument("--content-w", type=float, default=1,
-                             help="content weight")
-    optim_group.add_argument("--lr", type=float, default=1.0,
-                             help="learning rate")
-    optim_group.add_argument("--init-method", default=DEFAULT_INIT_METHOD,
-                             choices=["content", "random", "white"],
-                             help="initialization method")
-    optim_group.add_argument("--no-normalize", action="store_true",
-                             dest="no_normalize", default=False,
-                             help="disable ImageNet normalization "
-                                  "(normalization is enabled by default)")
-    optim_group.add_argument("--seed", type=int, default=SEED,
-                             help="random seed for reproducibility "
-                                  f"(default: {SEED})")
+    # Optimization
+    opt = p.add_argument_group("optimization")
+    opt.add_argument("--steps", type=int, default=DEFAULT_STEPS,
+                     help="Number of optimization steps")
+    opt.add_argument("--style-w", type=float, default=DEFAULT_STYLE_WEIGHT,
+                     help="Style weight")
+    opt.add_argument("--content-w", type=float,
+                     default=DEFAULT_CONTENT_WEIGHT, help="Content weight")
+    opt.add_argument("--lr", type=float, default=DEFAULT_LEARNING_RATE,
+                     help="Learning rate")
+    opt.add_argument("--init-method", choices=["random", "white", "content"],
+                     default=DEFAULT_INIT_METHOD,
+                     help="Initialization method")
+    opt.add_argument("--seed", type=int, default=DEFAULT_SEED,
+                     help="Random seed")
+    opt.add_argument("--no-normalize", action="store_true",
+                     help="Disable VGG19 normalization")
 
-    # Video output options group
-    video_group = p.add_argument_group("Video Output Options")
-    video_group.add_argument("--save-every", type=int, default=20,
-                             help="save frame every N steps")
-    video_group.add_argument("--fps", type=int, default=DEFAULT_FPS,
-                             help="fps for timelapse video")
-    video_group.add_argument("--no-video", action="store_true",
-                             help="skip creating timelapse video")
-    video_group.add_argument("--final-only", action="store_true",
-                             help="only save final stylized image")
-    video_group.add_argument("--quality", type=int,
-                             default=DEFAULT_VIDEO_QUALITY,
-                             help="quality setting for output video "
-                                  f"(1–{DEFAULT_VIDEO_QUALITY}, "
-                                  "higher is better)")
+    # Video
+    video = p.add_argument_group("video")
+    video.add_argument("--save-every", type=int, default=DEFAULT_SAVE_EVERY,
+                       help="Save image every N steps")
+    video.add_argument("--fps", type=int, default=DEFAULT_FPS,
+                       help="Frames per second for video")
+    video.add_argument("--quality", type=int, default=DEFAULT_VIDEO_QUALITY,
+                       help="Video quality (lower is better)")
+    video.add_argument("--no-video", action="store_true",
+                       help="Disable video creation")
+    video.add_argument("--final-only", action="store_true",
+                       default=DEFAULT_FINAL_ONLY,
+                       help="Only save final image")
 
-    # Hardware options group
-    hw_group = p.add_argument_group("Hardware Options")
-    hw_group.add_argument("--device", default="cuda",
-                          choices=["cpu", "cuda"],
-                          help="force device (default: cuda)")
+    # Hardware
+    hw = p.add_argument_group("hardware")
+    hw.add_argument("--device", type=str, default=DEFAULT_DEVICE,
+                    help="Device to run on (e.g., 'cuda' or 'cpu')")
 
+    # Config
+    cfg = p.add_argument_group("config")
+    cfg.add_argument("--config", type=str, help="Path to config.toml file")
+    cfg.add_argument(
+        "--validate-config-only",
+        action="store_true",
+        help="Validate config file and exit without running style transfer"
+    )
     return p
 
 
 def run_from_args(args: argparse.Namespace) -> torch.Tensor:
     """Run style transfer from command-line arguments."""
+    # Load config file if specified
+    config = StyleTransferConfig()
+    if args.config:
+        config = ConfigLoader.load(args.config)
+        if args.validate_config_only:
+            config = ConfigLoader.load(args.config)
+            logger.info("Config %s validated successfully.", args.config)
+            sys.exit(0)
+
+    # CLI overrides config (or uses default from config object)
+    def get(attr, section):
+        if hasattr(args, attr) and getattr(args, attr) is not None:
+            return getattr(args, attr)
+        return getattr(getattr(config, section), attr)
+
     log_parameters(args)
 
     return style_transfer(
         content_path=args.content,
         style_path=args.style,
-        output_dir=args.output,
-        steps=args.steps,
-        save_every=args.save_every,
-        style_weight=args.style_w,
-        content_weight=args.content_w,
-        learning_rate=args.lr,
-        fps=args.fps,
-        device_name=args.device,
-        init_method=args.init_method,
-        normalize=not args.no_normalize,
-        create_video=not args.no_video,
-        final_only=args.final_only,
-        video_quality=args.quality,
-        seed=args.seed
+        output_dir=get("output", "output"),
+        steps=get("steps", "optimization"),
+        save_every=get("save_every", "video"),
+        style_weight=get("style_w", "optimization"),
+        content_weight=get("content_w", "optimization"),
+        learning_rate=get("lr", "optimization"),
+        fps=get("fps", "video"),
+        device_name=get("device", "hardware"),
+        init_method=get("init_method", "optimization"),
+        normalize=(not args.no_normalize
+                   if hasattr(args, "no_normalize")
+                   else get("normalize", "optimization")),
+        create_video=(not args.no_video
+                      if hasattr(args, "no_video")
+                      else get("create_video", "video")),
+        final_only=(args.final_only
+                    if hasattr(args, "final_only") and args.final_only
+                    else get("final_only", "video")),
+        video_quality=get("quality", "video"),
+        seed=get("seed", "optimization")
     )
 
 
 def main() -> None:
     """Main entry point for the CLI."""
-    args = build_arg_parser().parse_args()
+    arg_parser = build_arg_parser()
+    args = arg_parser.parse_args()
+    if not args.validate_config_only and (not args.content or not args.style):
+        arg_parser.error("the following arguments are required:"
+                         " --content, --style")
     run_from_args(args)
 
 
