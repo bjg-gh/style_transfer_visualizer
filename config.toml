@@ -5,7 +5,7 @@
 # visualizer.
 #
 # Save this file as config.toml and use:
-#   python style_transfer_visualizer.py --config config.toml
+#   python run_visualizer.py --config config.toml
 # ============================================================================
 [output]
 output = "out"
