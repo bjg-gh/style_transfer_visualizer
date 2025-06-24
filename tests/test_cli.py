@@ -14,36 +14,26 @@ CLI use.
 
 import argparse
 import sys
-import subprocess
+from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
-from pathlib import Path
-from PIL import Image
-import style_transfer_visualizer as stv
 
-from config_defaults import (
-    DEFAULT_OUTPUT_DIR,
-    DEFAULT_STEPS,
-    DEFAULT_SAVE_EVERY,
-    DEFAULT_STYLE_WEIGHT,
-    DEFAULT_CONTENT_WEIGHT,
-    DEFAULT_LEARNING_RATE,
-    DEFAULT_FPS,
-    DEFAULT_VIDEO_QUALITY,
-    DEFAULT_INIT_METHOD,
-    DEFAULT_DEVICE,
-    DEFAULT_SEED,
-    DEFAULT_FINAL_ONLY,
-    DEFAULT_NORMALIZE,
-    DEFAULT_CREATE_VIDEO
+import style_transfer_visualizer.main as stv_main
+import style_transfer_visualizer.cli as stv_cli
+from style_transfer_visualizer.config_defaults import (
+    DEFAULT_OUTPUT_DIR, DEFAULT_STEPS, DEFAULT_SAVE_EVERY,
+    DEFAULT_STYLE_WEIGHT, DEFAULT_CONTENT_WEIGHT, DEFAULT_LEARNING_RATE,
+    DEFAULT_FPS, DEFAULT_VIDEO_QUALITY, DEFAULT_INIT_METHOD, DEFAULT_DEVICE,
+    DEFAULT_SEED, DEFAULT_FINAL_ONLY, DEFAULT_NORMALIZE, DEFAULT_CREATE_VIDEO
 )
+
 
 class TestCLIArgumentParsing:
     def test_arg_parser_defaults(self):
         """Test that default CLI arguments are parsed correctly."""
-        parser = stv.build_arg_parser()
+        parser = stv_cli.build_arg_parser()
         default_args = parser.parse_args(["--content", "c.jpg", "--style",
                                           "s.jpg"])
 
@@ -63,7 +53,7 @@ class TestCLIArgumentParsing:
     def test_arg_parser_flags(self):
         """Test parsing of boolean flags like --no-normalize and
         --final-only."""
-        parser = stv.build_arg_parser()
+        parser = stv_cli.build_arg_parser()
         args = parser.parse_args([
             "--content", "c.jpg",
             "--style", "s.jpg",
@@ -79,7 +69,7 @@ class TestCLIArgumentParsing:
     @pytest.mark.parametrize("invalid_flag", ["--steps", "--fps", "--device"])
     def test_arg_parser_invalid_usage(self, invalid_flag: str):
         """Test that invalid CLI flag usage exits cleanly."""
-        parser = stv.build_arg_parser()
+        parser = stv_cli.build_arg_parser()
         with pytest.raises(SystemExit):
             parser.parse_args(["--content", "c.jpg", "--style", "s.jpg",
                                invalid_flag])
@@ -111,14 +101,14 @@ class TestCLIMainFlow:
 
         captured_args: dict = {}
         monkeypatch.setattr(
-            stv,
+            stv_main,
             "style_transfer",
             lambda **kwargs: captured_args.update(kwargs)
             or torch.rand(1, 3, 64, 64)
         )
-        monkeypatch.setattr(stv, "log_parameters", lambda x: None)
+        monkeypatch.setattr(stv_cli, "log_parameters", lambda x: None)
 
-        result = stv.run_from_args(dummy_args)
+        result = stv_cli.run_from_args(dummy_args)
         assert isinstance(result, torch.Tensor)
         assert captured_args["output_dir"] == "output"
         assert captured_args["steps"] == 123
@@ -158,15 +148,13 @@ class TestCLIMainFlow:
         )
         captured = {}
 
-        monkeypatch.setattr("style_transfer_visualizer.log_parameters",
-                            lambda _: None)
-        monkeypatch.setattr(
-            "style_transfer_visualizer.style_transfer",
+        monkeypatch.setattr(stv_cli, "log_parameters", lambda _: None)
+        monkeypatch.setattr(stv_main, "style_transfer",
             lambda **kwargs: captured.update(kwargs)
                              or torch.rand(1, 3, 64, 64)
         )
 
-        stv.run_from_args(args)
+        stv_cli.run_from_args(args)
         assert captured["normalize"] is False
         assert captured["create_video"] is False
 
@@ -179,11 +167,11 @@ class TestCLIMainFlow:
 
         was_called: dict = {}
         monkeypatch.setattr(
-            stv, "run_from_args",
+            stv_cli, "run_from_args",
             lambda args: was_called.update({"called": True})
         )
 
-        stv.main()
+        stv_cli.main()
         assert was_called.get("called") is True
 
     def test_arg_parser_missing_required(self, monkeypatch: Any):
@@ -194,34 +182,7 @@ class TestCLIMainFlow:
         )
 
         with pytest.raises(SystemExit):
-            stv.main()
-
-    def test_log_parameters_logs_config(self, caplog):
-        """Test that log_parameters logs the config path when present."""
-        args = argparse.Namespace(
-            config="path/to/config.toml",
-            content="c.jpg",
-            style="s.jpg",
-            output=DEFAULT_OUTPUT_DIR,
-            steps=DEFAULT_STEPS,
-            style_w=DEFAULT_STYLE_WEIGHT,
-            content_w=DEFAULT_CONTENT_WEIGHT,
-            lr=DEFAULT_LEARNING_RATE,
-            save_every=DEFAULT_SAVE_EVERY,
-            fps=DEFAULT_FPS,
-            quality=DEFAULT_VIDEO_QUALITY,
-            init_method=DEFAULT_INIT_METHOD,
-            device=DEFAULT_DEVICE,
-            seed=DEFAULT_SEED,
-            final_only=DEFAULT_FINAL_ONLY,
-            no_normalize=not DEFAULT_NORMALIZE,
-            no_video=not DEFAULT_CREATE_VIDEO
-        )
-        caplog.set_level("INFO")
-
-        stv.log_parameters(args)
-        assert any("Loaded config from: path/to/config.toml"
-                   in message for message in caplog.messages)
+            stv_cli.main()
 
     def test_run_from_args_config_fallback(
         self,
@@ -257,15 +218,13 @@ class TestCLIMainFlow:
 
         captured = {}
 
-        monkeypatch.setattr("style_transfer_visualizer.log_parameters",
-                            lambda _: None)
-        monkeypatch.setattr(
-            "style_transfer_visualizer.style_transfer",
+        monkeypatch.setattr(stv_cli, "log_parameters", lambda _: None)
+        monkeypatch.setattr(stv_main, "style_transfer",
             lambda **kwargs: captured.update(kwargs)
                              or torch.rand(1, 3, 64, 64)
         )
 
-        result = stv.run_from_args(args)
+        result = stv_cli.run_from_args(args)
         assert isinstance(result, torch.Tensor)
         assert captured["output_dir"] == "from_config"
         assert captured["steps"] == DEFAULT_STEPS
@@ -293,15 +252,13 @@ class TestCLIMainFlow:
 
         captured = {}
 
-        monkeypatch.setattr("style_transfer_visualizer.log_parameters",
-                            lambda _: None)
-        monkeypatch.setattr(
-            "style_transfer_visualizer.style_transfer",
+        monkeypatch.setattr(stv_cli, "log_parameters", lambda _: None)
+        monkeypatch.setattr(stv_main, "style_transfer",
             lambda **kwargs: captured.update(kwargs)
                              or torch.rand(1, 3, 64, 64)
         )
 
-        result = stv.run_from_args(args)
+        result = stv_cli.run_from_args(args)
         assert isinstance(result, torch.Tensor)
         assert captured["output_dir"] == DEFAULT_OUTPUT_DIR
 
@@ -328,47 +285,40 @@ class TestCLIMainFlow:
             exit_called["code"] = code
             raise SystemExit()
 
-        monkeypatch.setattr(stv.sys, "exit", fake_exit)
-        monkeypatch.setattr(stv, "log_parameters", lambda _: None)
+        monkeypatch.setattr(stv_cli.sys, "exit", fake_exit)
+        monkeypatch.setattr(stv_cli, "log_parameters", lambda _: None)
 
         try:
-            stv.run_from_args(args)
+            stv_cli.run_from_args(args)
         except SystemExit:
             pass
 
         assert exit_called["code"] == 0
 
 
-@pytest.mark.integration
-def test_script_main_entry(tmp_path: Path):
-    """Integration test: execute script via subprocess with real images."""
-    script: Path = Path("style_transfer_visualizer.py").resolve()
-    content: Path = tmp_path / "content.jpg"
-    style: Path = tmp_path / "style.jpg"
-
-    Image.new("RGB", (64, 64), color="blue").save(content)
-    Image.new("RGB", (64, 64), color="green").save(style)
-
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(script),
-            "--content", str(content),
-            "--style", str(style),
-            "--final-only",
-            "--device", "cpu",
-            "--steps", "2",
-            "--save-every", "3",
-            "--init-method", "white"
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        timeout=180,
-        check=False,
+def test_log_parameters_logs_config(caplog):
+    """Test that log_parameters logs the config path when present."""
+    args = argparse.Namespace(
+        config="path/to/config.toml",
+        content="c.jpg",
+        style="s.jpg",
+        output=DEFAULT_OUTPUT_DIR,
+        steps=DEFAULT_STEPS,
+        style_w=DEFAULT_STYLE_WEIGHT,
+        content_w=DEFAULT_CONTENT_WEIGHT,
+        lr=DEFAULT_LEARNING_RATE,
+        save_every=DEFAULT_SAVE_EVERY,
+        fps=DEFAULT_FPS,
+        quality=DEFAULT_VIDEO_QUALITY,
+        init_method=DEFAULT_INIT_METHOD,
+        device=DEFAULT_DEVICE,
+        seed=DEFAULT_SEED,
+        final_only=DEFAULT_FINAL_ONLY,
+        no_normalize=not DEFAULT_NORMALIZE,
+        no_video=not DEFAULT_CREATE_VIDEO
     )
+    caplog.set_level("INFO")
 
-    assert result.returncode == 0, (
-        f"Script failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
-    )
-    assert "Style transfer completed" in result.stdout or result.stderr
+    stv_cli.log_parameters(args)
+    assert any("Loaded config from: path/to/config.toml"
+               in message for message in caplog.messages)

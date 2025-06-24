@@ -6,12 +6,12 @@ and a TOML-based config loader with validation support.
 """
 
 from pathlib import Path
-from pydantic import BaseModel, Field
 
 import tomlkit
+from pydantic import BaseModel, Field
 
 # Import internal constants for shared use
-from config_defaults import (
+from style_transfer_visualizer.config_defaults import (
     DEFAULT_STEPS,
     DEFAULT_STYLE_WEIGHT,
     DEFAULT_CONTENT_WEIGHT,
@@ -27,6 +27,7 @@ from config_defaults import (
     DEFAULT_DEVICE,
     DEFAULT_OUTPUT_DIR
 )
+
 
 class OptimizationConfig(BaseModel):
     steps: int = Field(DEFAULT_STEPS, ge=1)
@@ -62,7 +63,8 @@ class StyleTransferConfig(BaseModel):
     under logical categories.
     """
     output: OutputConfig = Field(default_factory=OutputConfig)
-    optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)
+    optimization: OptimizationConfig = Field(default_factory
+                                             =OptimizationConfig)
     video: VideoConfig = Field(default_factory=VideoConfig)
     hardware: HardwareConfig = Field(default_factory=HardwareConfig)
 

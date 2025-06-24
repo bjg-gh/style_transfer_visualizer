@@ -11,16 +11,17 @@ Note:
 
 import os
 import tempfile
-from typing import Generator, List
 from pathlib import Path
+from typing import Generator, List
 
 import pytest
 import torch
+from PIL import Image
 from torch import Tensor
 from torch.optim import Optimizer
-from PIL import Image
 
-from constants import COLOR_MODE_RGB
+from style_transfer_visualizer.constants import COLOR_MODE_RGB
+from style_transfer_visualizer.logging_utils import logger
 
 
 @pytest.fixture
@@ -166,5 +167,5 @@ def video_path(test_dir: str) -> str:
 @pytest.fixture(autouse=True)
 def enable_logger_propagation(monkeypatch: pytest.MonkeyPatch) -> None:
     """Enable propagation for visualizer logger to allow caplog to work."""
-    import style_transfer_visualizer as stv
-    monkeypatch.setattr(stv.logger, "propagate", True)
+    
+    monkeypatch.setattr(logger, "propagate", True)
