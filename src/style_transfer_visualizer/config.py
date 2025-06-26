@@ -15,7 +15,7 @@ from style_transfer_visualizer.config_defaults import (
     DEFAULT_STEPS,
     DEFAULT_STYLE_WEIGHT,
     DEFAULT_CONTENT_WEIGHT,
-    DEFAULT_LEARNING_RATE,
+    DEFAULT_LBFGS_LR,
     DEFAULT_INIT_METHOD,
     DEFAULT_SEED,
     DEFAULT_NORMALIZE,
@@ -25,7 +25,8 @@ from style_transfer_visualizer.config_defaults import (
     DEFAULT_CREATE_VIDEO,
     DEFAULT_FINAL_ONLY,
     DEFAULT_DEVICE,
-    DEFAULT_OUTPUT_DIR
+    DEFAULT_OUTPUT_DIR,
+    DEFAULT_OPTIMIZER
 )
 
 
@@ -33,7 +34,8 @@ class OptimizationConfig(BaseModel):
     steps: int = Field(DEFAULT_STEPS, ge=1)
     style_w: float = Field(DEFAULT_STYLE_WEIGHT, ge=0)
     content_w: float = Field(DEFAULT_CONTENT_WEIGHT, ge=0)
-    lr: float = Field(DEFAULT_LEARNING_RATE, gt=0)
+    optimizer: str = Field(DEFAULT_OPTIMIZER)
+    lr: float = Field(DEFAULT_LBFGS_LR, gt=0)
     init_method: str = Field(DEFAULT_INIT_METHOD)
     seed: int = Field(DEFAULT_SEED, ge=0)
     normalize: bool = DEFAULT_NORMALIZE

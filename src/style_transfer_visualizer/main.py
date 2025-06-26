@@ -6,10 +6,10 @@ import torch
 
 from style_transfer_visualizer.config_defaults import (
     DEFAULT_OUTPUT_DIR, DEFAULT_STEPS, DEFAULT_SAVE_EVERY,
-    DEFAULT_STYLE_WEIGHT, DEFAULT_CONTENT_WEIGHT, DEFAULT_LEARNING_RATE,
+    DEFAULT_STYLE_WEIGHT, DEFAULT_CONTENT_WEIGHT,
     DEFAULT_INIT_METHOD, DEFAULT_SEED, DEFAULT_NORMALIZE, DEFAULT_FPS,
     DEFAULT_VIDEO_QUALITY, DEFAULT_CREATE_VIDEO, DEFAULT_FINAL_ONLY,
-    DEFAULT_DEVICE
+    DEFAULT_DEVICE, DEFAULT_OPTIMIZER, DEFAULT_LBFGS_LR
 )
 import style_transfer_visualizer.core_model as stv_core_model
 import style_transfer_visualizer.image_io as stv_image_io
@@ -26,7 +26,8 @@ def style_transfer(
     save_every: int = DEFAULT_SAVE_EVERY,
     style_weight: float = DEFAULT_STYLE_WEIGHT,
     content_weight: float = DEFAULT_CONTENT_WEIGHT,
-    learning_rate: float = DEFAULT_LEARNING_RATE,
+    optimizer_name: str = DEFAULT_OPTIMIZER,
+    learning_rate: float = DEFAULT_LBFGS_LR,
     fps: int = DEFAULT_FPS,
     device_name: str = DEFAULT_DEVICE,
     init_method: str = DEFAULT_INIT_METHOD,
@@ -47,6 +48,7 @@ def style_transfer(
         save_every: Save frame every N steps
         style_weight: Weight for style loss
         content_weight: Weight for content loss
+        optimizer_name: Optimizer name (lbfgs or adam)
         learning_rate: Learning rate for optimizer
         fps: Frames per second for timelapse video
         device_name: Device to run on ("cuda" or "cpu")
@@ -85,7 +87,8 @@ def style_transfer(
 
     # Prepare model and optimizer
     model, input_img, optimizer = stv_core_model.prepare_model_and_input(
-        content_img, style_img, device, init_method, learning_rate
+        content_img, style_img, device, init_method, optimizer_name,
+        learning_rate
     )
 
     # Prepare output paths
@@ -100,11 +103,16 @@ def style_transfer(
     )
 
     # Run optimization
-    input_img, loss_metrics, elapsed = stv_optimizer.run_optimization_loop(
-        model, input_img, optimizer,
-        steps, save_every, style_weight,
-        content_weight, normalize, video_writer
-    )
+    if isinstance(optimizer, torch.optim.LBFGS):
+        input_img, loss_metrics, elapsed = stv_optimizer.run_second_order_optimization_loop(
+            model, input_img, optimizer, steps, save_every,
+            style_weight, content_weight, normalize, video_writer
+        )
+    else:
+        input_img, loss_metrics, elapsed = stv_optimizer.run_first_order_optimization_loop(
+            model, input_img, optimizer, steps, save_every,
+            style_weight, content_weight, normalize, video_writer
+        )
 
     # Clean up and save outputs
     if video_writer:

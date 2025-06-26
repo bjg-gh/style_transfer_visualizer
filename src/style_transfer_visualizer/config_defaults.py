@@ -1,10 +1,12 @@
 """Shared default values for user-facing configuration settings."""
 
 # Optimization
-DEFAULT_STEPS = 300
+DEFAULT_STEPS = 1500
 DEFAULT_STYLE_WEIGHT = 1e5
 DEFAULT_CONTENT_WEIGHT = 1.0
-DEFAULT_LEARNING_RATE = 1.0
+DEFAULT_OPTIMIZER = "lbfgs"  # Options: "lbfgs", "adam"
+DEFAULT_ADAM_LR = 0.03
+DEFAULT_LBFGS_LR = 1.0
 DEFAULT_INIT_METHOD = "random"
 DEFAULT_SEED = 0
 DEFAULT_NORMALIZE = True

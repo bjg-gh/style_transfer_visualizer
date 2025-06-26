@@ -1,6 +1,24 @@
-# Style Transfer Visualizer
+# Style Transfer Visualizer: Adam Exploration
 
-A command-line tool that applies neural style transfer to images using PyTorch. It supports timelapse video generation, configuration via CLI or TOML, and flexible output control.
+A command-line tool that applies neural style transfer to images using PyTorch. It supports timelapse video generation,
+configuration via CLI or TOML, and flexible output control.
+
+## Exploration and Abandonment of Adam Optimizer
+After a full implementation, benchmarking, and visual inspection, I've decided to remove Adam optimizer support and
+freeze the work in this branch.
+
+Although Adam is popular for many deep learning tasks, the evaluation showed:
+
+* LBFGS produces consistently better results for neural style transfer in fewer steps
+* Adam required significantly more tuning (e.g., higher style weights, longer runs) and still underperformed
+* The added complexity in CLI, config, and optimization logic was not justified by quality or speed gains
+
+Since LBFGS works better out of the box for this specific task, I’ve decided to drop Adam and keep the pipeline
+streamlined.
+
+Thus, unit tests have not been updated to reflect the Adam code changes.
+
+If future use cases emerge (e.g., batch transfer, multi-resolution training), this decision can be revisited.
 
 ## Features
 
@@ -49,6 +67,7 @@ python run_visualizer.py --content path/to/content.jpg --style path/to/style.jpg
 
 - `--steps`, `--save-every`, `--style-w`, `--content-w`, `--lr`
 - `--init-method {random,white,content}`
+- `--optimizer`
 - `--fps`, `--quality`
 - `--no-normalize`, `--no-video`, `--final-only`
 - `--device cpu|cuda`

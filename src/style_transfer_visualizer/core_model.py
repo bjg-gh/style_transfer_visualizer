@@ -9,6 +9,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import vgg19, VGG19_Weights
 
+from style_transfer_visualizer.config_defaults import DEFAULT_LBFGS_LR, \
+    DEFAULT_OPTIMIZER
 from style_transfer_visualizer.constants import (
     STYLE_LAYERS, CONTENT_LAYERS, GRAM_MATRIX_CLAMP_MAX
 )
@@ -294,7 +296,8 @@ def prepare_model_and_input(
     style_img: torch.Tensor,
     device: torch.device,
     init_method: InitMethod = "random",
-    learning_rate: float = 1.0
+    optimizer_name: str = DEFAULT_OPTIMIZER,
+    learning_rate: float = DEFAULT_LBFGS_LR
 ) -> Tuple[nn.Module, torch.Tensor, torch.optim.Optimizer]:
     """Initialize the model and input image for style transfer.
 
@@ -303,6 +306,7 @@ def prepare_model_and_input(
         style_img: Style image tensor
         device: Device to run the model on
         init_method: Method to initialize the input image
+        optimizer_name: Optimizer name: "lbfgs" or "adam"
         learning_rate: Learning rate for the optimizer
 
     Returns:
@@ -311,5 +315,12 @@ def prepare_model_and_input(
     model = StyleContentModel(STYLE_LAYERS, CONTENT_LAYERS).to(device)
     model.set_targets(style_img, content_img)
     input_img = initialize_input(content_img, init_method)
-    optimizer = torch.optim.LBFGS([input_img], lr=learning_rate)
+
+    if optimizer_name == "lbfgs":
+        optimizer = torch.optim.LBFGS([input_img], lr=learning_rate)
+    elif optimizer_name == "adam":
+        optimizer = torch.optim.Adam([input_img], lr=learning_rate)
+    else:
+        raise ValueError(f"Unsupported optimizer: {optimizer_name}")
+
     return model, input_img, optimizer

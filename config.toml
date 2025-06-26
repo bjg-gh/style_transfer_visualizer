@@ -11,11 +11,12 @@
 output = "out"
 
 [optimization]
-steps = 300
-style_w = 1000000.0
+steps = 6000
+style_w = 10000.0
 content_w = 1.0
-lr = 1.0
-init_method = "random"
+optimizer = "adam"
+lr = 0.001
+init_method = "content"
 seed = 0
 normalize = true
 
