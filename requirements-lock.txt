@@ -35,7 +35,7 @@ pytest-benchmark==5.1.0
 pytest-cov==6.1.1
 pytest-mock==3.14.0
 python-dateutil==2.9.0.post0
-setuptools==70.2.0
+setuptools==78.1.1
 six==1.17.0
 sortedcontainers==2.4.0
 sympy==1.13.3
