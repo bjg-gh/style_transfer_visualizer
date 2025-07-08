@@ -258,12 +258,36 @@ class TestSaveOutputs:
             style_name="mosaic",
             video_name="timelapse_dog_x_mosaic.mp4",
             normalize=False,
-            video_created=True
+            video_created=True,
+            plot_losses=True
         )
 
         final_path = output_dir / "stylized_dog_x_mosaic.png"
         assert final_path.exists()
         assert final_path.stat().st_size > 0
+
+    def test_save_outputs_no_plot(self, output_dir: Path):
+        """Test save_outputs skips plotting when plot_losses=False."""
+        input_img = torch.rand(1, 3, 64, 64)
+        loss_metrics = {
+            "style_loss": [1.0],
+            "content_loss": [0.5],
+            "total_loss": [1.5]
+        }
+        stv_utils.save_outputs(
+            input_img = input_img,
+            loss_metrics = loss_metrics,
+            output_dir = output_dir,
+            elapsed = 2.5,
+            content_name = "cat",
+            style_name = "wave",
+            video_name = None,
+            normalize = False,
+            video_created = False,
+            plot_losses = False
+        )
+        final_path = output_dir / "stylized_cat_x_wave.png"
+        assert final_path.exists()
 
     def test_logs_video_path(
         self,

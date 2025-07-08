@@ -38,7 +38,8 @@ def style_transfer(
     create_video: bool = DEFAULT_CREATE_VIDEO,
     final_only: bool = DEFAULT_FINAL_ONLY,
     video_quality: int = DEFAULT_VIDEO_QUALITY,
-    seed: int = DEFAULT_SEED
+    seed: int = DEFAULT_SEED,
+    plot_losses: bool = True
 ) -> torch.Tensor:
     """
     Orchestrates the full style transfer pipeline.
@@ -124,7 +125,8 @@ def style_transfer(
         style_name=style_name,
         video_name=video_name,
         normalize=normalize,
-        video_created=create_video
+        video_created=create_video,
+        plot_losses=plot_losses
     )
 
     return input_img.detach().clamp(0, 1)

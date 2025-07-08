@@ -34,6 +34,8 @@ Note:
     output.add_argument(
         "--output", type=str, help="Output directory",
         default=argparse.SUPPRESS)
+    output.add_argument("--no-plot", action="store_true",
+                        help = "Disable loss plotting")
 
     opt = p.add_argument_group("optimization")
     opt.add_argument(
@@ -121,6 +123,8 @@ def log_parameters(p: dict, args: argparse.Namespace) -> None:
                 "Enabled" if p["normalize"] else "Disabled")
     logger.info("Video Creation: %s",
                 "Enabled" if p["create_video"] else "Disabled")
+    logger.info("Loss Plotting: %s",
+                "Enabled" if p["plot_losses"] else "Disabled")
     logger.info("Random Seed: %d", p["seed"])
 
 
@@ -171,7 +175,8 @@ def run_from_args(args: argparse.Namespace):
         "create_video": not getattr(args, "no_video", False),
         "final_only": getattr(args, "final_only", False),
         "video_quality": get("quality", "video"),
-        "seed": get("seed", "optimization")
+        "seed": get("seed", "optimization"),
+        "plot_losses": not getattr(args, "no_plot", False)
     }
 
     log_parameters(params, args)
