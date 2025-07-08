@@ -11,10 +11,16 @@
 output = "out"
 
 [optimization]
-steps = 300
+steps = 1500
 style_w = 1000000.0
 content_w = 1.0
 lr = 1.0
+# VGG19 layer indices for computing style loss
+# Common: [0, 5, 10, 19, 28]
+style_layers = [0, 5, 10, 19, 28]
+# VGG19 layer indices for computing content loss
+# Common: [21]
+content_layers = [21]
 init_method = "random"
 seed = 0
 normalize = true

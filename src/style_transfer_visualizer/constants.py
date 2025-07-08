@@ -4,13 +4,6 @@ These are implementation-level defaults that should not be overridden
 via config files or CLI arguments.
 """
 
-# From torchvision.models.vgg19.
-# See:
-# https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py
-# https://medium.com/@ferlatti.aldo/neural-style-transfer-nst-theory-and-implementation-c26728cf969d
-STYLE_LAYERS = [0, 5, 10, 19, 28]
-CONTENT_LAYERS = [21]
-
 # Standard ImageNet normalization values used in torchvision.models
 # See: https://pytorch.org/vision/stable/models.html#classification
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
