@@ -57,6 +57,12 @@ Note:
     opt.add_argument(
         "--no-normalize", action="store_true",
         help="Disable VGG19 normalization")
+    opt.add_argument(
+        "--style-layers", type=str,
+        help="Comma-separated VGG19 layer indices for style loss")
+    opt.add_argument(
+        "--content-layers", type=str,
+        help="Comma-separated VGG19 layer indices for content loss")
 
     video = p.add_argument_group("video")
     video.add_argument(
@@ -106,6 +112,8 @@ def log_parameters(p: dict, args: argparse.Namespace) -> None:
     logger.info("Style Weight: %g", p["style_weight"])
     logger.info("Content Weight: %g", p["content_weight"])
     logger.info("Learning Rate: %g", p["learning_rate"])
+    logger.info("Style Layers: %s", p["style_layers"])
+    logger.info("Content Layers: %s", p["content_layers"])
     logger.info("FPS for Timelapse Video: %d", p["fps"])
     logger.info("Video Quality: %d (1–10 scale)", p["video_quality"])
     logger.info("Initialization Method: %s", p["init_method"])
@@ -114,6 +122,20 @@ def log_parameters(p: dict, args: argparse.Namespace) -> None:
     logger.info("Video Creation: %s",
                 "Enabled" if p["create_video"] else "Disabled")
     logger.info("Random Seed: %d", p["seed"])
+
+
+def parse_int_list(s: str | list[int]) -> list[int]:
+    """Convert a comma-separated string or list of ints into a list of ints.
+
+    Args:
+        s: A string like "0,1,2" or a list of integers.
+
+    Returns:
+        A list of integers.
+    """
+    if isinstance(s, list):
+        return s
+    return list(map(int, s.split(",")))
 
 
 def run_from_args(args: argparse.Namespace):
@@ -139,6 +161,9 @@ def run_from_args(args: argparse.Namespace):
         "style_weight": get("style_w", "optimization"),
         "content_weight": get("content_w", "optimization"),
         "learning_rate": get("lr", "optimization"),
+        "style_layers": parse_int_list(get("style_layers", "optimization")),
+        "content_layers": parse_int_list(get("content_layers",
+                                             "optimization")),
         "fps": get("fps", "video"),
         "device_name": get("device", "hardware"),
         "init_method": get("init_method", "optimization"),

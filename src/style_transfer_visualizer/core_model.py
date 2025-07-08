@@ -10,7 +10,11 @@ import torch.nn.functional as F
 from torchvision.models import vgg19, VGG19_Weights
 
 from style_transfer_visualizer.constants import (
-    STYLE_LAYERS, CONTENT_LAYERS, GRAM_MATRIX_CLAMP_MAX
+    GRAM_MATRIX_CLAMP_MAX
+)
+from style_transfer_visualizer.config_defaults import (
+    STYLE_LAYER_DEFAULTS,
+    CONTENT_LAYER_DEFAULTS
 )
 from style_transfer_visualizer.types import InitMethod, TensorList
 
@@ -294,7 +298,9 @@ def prepare_model_and_input(
     style_img: torch.Tensor,
     device: torch.device,
     init_method: InitMethod = "random",
-    learning_rate: float = 1.0
+    learning_rate: float = 1.0,
+    style_layers: list[int] = STYLE_LAYER_DEFAULTS,
+    content_layers: list[int] = CONTENT_LAYER_DEFAULTS
 ) -> Tuple[nn.Module, torch.Tensor, torch.optim.Optimizer]:
     """Initialize the model and input image for style transfer.
 
@@ -304,11 +310,13 @@ def prepare_model_and_input(
         device: Device to run the model on
         init_method: Method to initialize the input image
         learning_rate: Learning rate for the optimizer
+        style_layers: List of style layers to optimize
+        content_layers: List of content layers to optimize
 
     Returns:
         Tuple of (model, input_img, optimizer)
     """
-    model = StyleContentModel(STYLE_LAYERS, CONTENT_LAYERS).to(device)
+    model = StyleContentModel(style_layers, content_layers).to(device)
     model.set_targets(style_img, content_img)
     input_img = initialize_input(content_img, init_method)
     optimizer = torch.optim.LBFGS([input_img], lr=learning_rate)

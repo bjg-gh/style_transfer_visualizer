@@ -25,7 +25,9 @@ from style_transfer_visualizer.config_defaults import (
     DEFAULT_CREATE_VIDEO,
     DEFAULT_FINAL_ONLY,
     DEFAULT_DEVICE,
-    DEFAULT_OUTPUT_DIR
+    DEFAULT_OUTPUT_DIR,
+    STYLE_LAYER_DEFAULTS,
+    CONTENT_LAYER_DEFAULTS
 )
 
 
@@ -37,7 +39,10 @@ class OptimizationConfig(BaseModel):
     init_method: str = Field(DEFAULT_INIT_METHOD)
     seed: int = Field(DEFAULT_SEED, ge=0)
     normalize: bool = DEFAULT_NORMALIZE
-
+    style_layers: list[int] = Field(
+        default_factory=lambda: STYLE_LAYER_DEFAULTS)
+    content_layers: list[int] = Field(
+        default_factory=lambda: CONTENT_LAYER_DEFAULTS)
 
 class VideoConfig(BaseModel):
     save_every: int = Field(DEFAULT_SAVE_EVERY, ge=1)

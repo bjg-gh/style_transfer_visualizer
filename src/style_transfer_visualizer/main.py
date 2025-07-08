@@ -1,6 +1,7 @@
 """Top-level orchestration for style transfer logic."""
 
 from pathlib import Path
+from typing import cast
 
 import torch
 
@@ -9,13 +10,14 @@ from style_transfer_visualizer.config_defaults import (
     DEFAULT_STYLE_WEIGHT, DEFAULT_CONTENT_WEIGHT, DEFAULT_LEARNING_RATE,
     DEFAULT_INIT_METHOD, DEFAULT_SEED, DEFAULT_NORMALIZE, DEFAULT_FPS,
     DEFAULT_VIDEO_QUALITY, DEFAULT_CREATE_VIDEO, DEFAULT_FINAL_ONLY,
-    DEFAULT_DEVICE
+    DEFAULT_DEVICE, CONTENT_LAYER_DEFAULTS, STYLE_LAYER_DEFAULTS
 )
 import style_transfer_visualizer.core_model as stv_core_model
 import style_transfer_visualizer.image_io as stv_image_io
 import style_transfer_visualizer.optimization as stv_optimizer
 import style_transfer_visualizer.utils as stv_utils
 import style_transfer_visualizer.video as stv_video
+from style_transfer_visualizer.types import InitMethod
 
 
 def style_transfer(
@@ -27,6 +29,8 @@ def style_transfer(
     style_weight: float = DEFAULT_STYLE_WEIGHT,
     content_weight: float = DEFAULT_CONTENT_WEIGHT,
     learning_rate: float = DEFAULT_LEARNING_RATE,
+    style_layers: list[int] = STYLE_LAYER_DEFAULTS,
+    content_layers: list[int] = CONTENT_LAYER_DEFAULTS,
     fps: int = DEFAULT_FPS,
     device_name: str = DEFAULT_DEVICE,
     init_method: str = DEFAULT_INIT_METHOD,
@@ -85,7 +89,8 @@ def style_transfer(
 
     # Prepare model and optimizer
     model, input_img, optimizer = stv_core_model.prepare_model_and_input(
-        content_img, style_img, device, init_method, learning_rate
+        content_img, style_img, device, cast(InitMethod, init_method),
+        learning_rate, style_layers, content_layers
     )
 
     # Prepare output paths

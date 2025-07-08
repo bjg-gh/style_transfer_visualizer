@@ -8,6 +8,12 @@ DEFAULT_LEARNING_RATE = 1.0
 DEFAULT_INIT_METHOD = "random"
 DEFAULT_SEED = 0
 DEFAULT_NORMALIZE = True
+# From torchvision.models.vgg19.
+# See:
+# https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py
+# https://medium.com/@ferlatti.aldo/neural-style-transfer-nst-theory-and-implementation-c26728cf969d
+STYLE_LAYER_DEFAULTS = [0, 5, 10, 19, 28]
+CONTENT_LAYER_DEFAULTS = [21]
 
 # Video
 DEFAULT_SAVE_EVERY = 20

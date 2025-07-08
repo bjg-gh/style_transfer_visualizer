@@ -18,6 +18,8 @@ from typing import Any
 
 import pytest
 import torch
+from _pytest.logging import LogCaptureFixture
+from _pytest.monkeypatch import MonkeyPatch
 
 import style_transfer_visualizer.cli as stv_cli
 import style_transfer_visualizer.main as stv_main
@@ -50,6 +52,53 @@ class TestCLIArgumentParsing:
         monkeypatch.setattr(sys, "argv", ["prog"])
         with pytest.raises(SystemExit):
             stv_cli.main()
+
+    @pytest.mark.parametrize(
+        "style_str, content_str, expected_style, expected_content", [
+            ("0,1,2", "3", [0, 1, 2], [3]),
+            ("5", "10,15", [5], [10, 15])
+        ])
+    def test_layer_args_are_parsed(
+        self,
+        monkeypatch: MonkeyPatch,
+        style_str: str,
+        content_str: str,
+        expected_style: list[int],
+        expected_content: list[int]
+    ) -> None:
+        """Verify CLI layer flags are parsed and forwarded correctly."""
+        args = argparse.Namespace(
+            content="c.jpg",
+            style="s.jpg",
+            config=None,
+            validate_config_only=False,
+            output="out",
+            steps=100,
+            save_every=5,
+            style_w=1.0,
+            content_w=1.0,
+            lr=1.0,
+            init_method="random",
+            no_normalize=False,
+            no_video=False,
+            final_only=False,
+            quality=9,
+            fps=10,
+            seed=42,
+            device="cpu",
+            style_layers=style_str,
+            content_layers=content_str
+        )
+
+        captured: dict[str, Any] = {}
+        monkeypatch.setattr(stv_main, "style_transfer",
+                            lambda **kwargs: captured.update(
+                                kwargs) or torch.rand(1))
+        monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
+
+        stv_cli.run_from_args(args)
+        assert captured["style_layers"] == expected_style
+        assert captured["content_layers"] == expected_content
 
 
 class TestCLIRunFromArgs:
@@ -204,6 +253,8 @@ class TestLogParameters:
             style_w=1.0,
             content_w=1.0,
             lr=0.5,
+            style_layers_str="0,5,10",
+            content_layers_str="21",
             fps=10,
             init_method="content",
             no_normalize=False,
@@ -224,6 +275,10 @@ class TestLogParameters:
             "style_weight": args.style_w,
             "content_weight": args.content_w,
             "learning_rate": args.lr,
+            "style_layers":  [int(x)
+                              for x in args.style_layers_str.split(",")],
+            "content_layers": [int(x)
+                               for x in args.content_layers_str.split(",")],
             "fps": args.fps,
             "init_method": args.init_method,
             "normalize": not args.no_normalize,
@@ -247,6 +302,8 @@ class TestLogParameters:
             style_w=1.0,
             content_w=1.0,
             lr=0.5,
+            style_layers_str="0,5,10",
+            content_layers_str="21",
             fps=10,
             init_method="content",
             no_normalize=False,
@@ -267,6 +324,10 @@ class TestLogParameters:
             "style_weight": args.style_w,
             "content_weight": args.content_w,
             "learning_rate": args.lr,
+            "style_layers":  [int(x)
+                              for x in args.style_layers_str.split(",")],
+            "content_layers": [int(x)
+                               for x in args.content_layers_str.split(",")],
             "fps": args.fps,
             "init_method": args.init_method,
             "normalize": not args.no_normalize,
@@ -278,6 +339,57 @@ class TestLogParameters:
         }, args)
 
         assert not any("Loaded config from:" in m for m in caplog.messages)
+
+    def test_log_parameters_includes_layer_config(
+        self,
+        caplog: LogCaptureFixture
+    ) -> None:
+        """Ensure log_parameters prints layer config to logs."""
+        args = argparse.Namespace(
+            content="cat.jpg",
+            style="s.jpg",
+            style_layers="0,5,10",
+            content_layers="21",
+            config="abc.toml",
+            output="out",
+            steps=10,
+            save_every=2,
+            style_w=1.0,
+            content_w=1.0,
+            lr=0.5,
+            fps=10,
+            init_method="content",
+            no_normalize=False,
+            no_video=False,
+            final_only=False,
+            quality=8,
+            seed=0,
+            device="cpu"
+        )
+        params = {
+            "content_path": args.content,
+            "style_path": args.style,
+            "output_dir": args.output,
+            "steps": args.steps,
+            "save_every": args.save_every,
+            "style_weight": args.style_w,
+            "content_weight": args.content_w,
+            "learning_rate": args.lr,
+            "fps": args.fps,
+            "init_method": args.init_method,
+            "normalize": not args.no_normalize,
+            "create_video": not args.no_video,
+            "final_only": args.final_only,
+            "video_quality": args.quality,
+            "seed": args.seed,
+            "device_name": args.device,
+            "style_layers": [0, 5, 10],
+            "content_layers": [21]
+        }
+        caplog.set_level("INFO")
+        stv_cli.log_parameters(params, args)
+        assert "Style Layers" in caplog.text
+        assert "Content Layers" in caplog.text
 
 
 class TestCLIMainFlow:
