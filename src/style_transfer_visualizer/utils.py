@@ -124,7 +124,8 @@ def save_outputs(
     style_name: str,
     video_name: Optional[str] = None,
     normalize: bool = True,
-    video_created: bool = True
+    video_created: bool = True,
+    plot_losses: bool = True
 ) -> None:
     """Save final stylized image, optional video, and loss plot."""
     # Ensure output directory exists
@@ -150,7 +151,8 @@ def save_outputs(
         logger.info("Video saved to: %s", output_dir / video_name)
 
     # Create and save loss plot
-    plot_loss_curves(loss_metrics, output_dir)
+    if plot_losses:
+        plot_loss_curves(loss_metrics, output_dir)
 
     # Log completion information
     logger.info("Style transfer completed in %.2f seconds", elapsed)

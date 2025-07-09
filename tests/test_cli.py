@@ -40,12 +40,14 @@ class TestCLIArgumentParsing:
             "--style", "s.jpg",
             "--no-normalize",
             "--no-video",
-            "--final-only"
+            "--final-only",
+            "--no-plot"
         ])
 
         assert args.no_normalize is True
         assert args.no_video is True
         assert args.final_only is True
+        assert args.no_plot is True
 
     def test_required_args_missing(self, monkeypatch: Any):
         """Test that missing required arguments triggers SystemExit."""
@@ -262,7 +264,8 @@ class TestLogParameters:
             final_only=False,
             quality=8,
             seed=0,
-            device="cpu"
+            device="cpu",
+            plot_losses=True
         )
 
         caplog.set_level("INFO")
@@ -286,7 +289,8 @@ class TestLogParameters:
             "final_only": args.final_only,
             "video_quality": args.quality,
             "seed": args.seed,
-            "device_name": args.device
+            "device_name": args.device,
+            "plot_losses": args.plot_losses
         }, args)
 
         assert any("Loaded config from: abc.toml" in m for m in caplog.messages)
@@ -311,7 +315,8 @@ class TestLogParameters:
             final_only=False,
             quality=8,
             seed=0,
-            device="cpu"
+            device="cpu",
+            plot_losses=True
         )
 
         caplog.set_level("INFO")
@@ -335,7 +340,8 @@ class TestLogParameters:
             "final_only": args.final_only,
             "video_quality": args.quality,
             "seed": args.seed,
-            "device_name": args.device
+            "device_name": args.device,
+            "plot_losses": args.plot_losses
         }, args)
 
         assert not any("Loaded config from:" in m for m in caplog.messages)
@@ -364,7 +370,8 @@ class TestLogParameters:
             final_only=False,
             quality=8,
             seed=0,
-            device="cpu"
+            device="cpu",
+            plot_losses=True
         )
         params = {
             "content_path": args.content,
@@ -384,12 +391,45 @@ class TestLogParameters:
             "seed": args.seed,
             "device_name": args.device,
             "style_layers": [0, 5, 10],
-            "content_layers": [21]
+            "content_layers": [21],
+            "plot_losses": args.plot_losses
         }
         caplog.set_level("INFO")
         stv_cli.log_parameters(params, args)
         assert "Style Layers" in caplog.text
         assert "Content Layers" in caplog.text
+
+    def test_no_plot_flag(self, monkeypatch: Any):
+        """Test that --no-plot disables plotting."""
+        args = argparse.Namespace(
+            content="cat.jpg",
+            style="wave.jpg",
+            config=None,
+            validate_config_only=False,
+            output=DEFAULT_OUTPUT_DIR,
+            steps=DEFAULT_STEPS,
+            save_every=DEFAULT_SAVE_EVERY,
+            style_w=DEFAULT_STYLE_WEIGHT,
+            content_w=DEFAULT_CONTENT_WEIGHT,
+            lr=DEFAULT_LEARNING_RATE,
+            fps=DEFAULT_FPS,
+            init_method=DEFAULT_INIT_METHOD,
+            no_normalize=False,
+            no_video=False,
+            no_plot=True,
+            final_only=False,
+            quality=DEFAULT_VIDEO_QUALITY,
+            seed=DEFAULT_SEED,
+            device=DEFAULT_DEVICE,
+        )
+        captured = {}
+        monkeypatch.setattr(stv_main, "style_transfer",
+                            lambda **kwargs:
+                            captured.update(kwargs) or torch.rand(1))
+        monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
+
+        stv_cli.run_from_args(args)
+        assert captured["plot_losses"] is False
 
 
 class TestCLIMainFlow:

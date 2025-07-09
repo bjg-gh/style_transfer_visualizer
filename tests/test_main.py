@@ -61,10 +61,48 @@ def test_style_transfer_minimal(monkeypatch):
         final_only=False,
         video_quality=5,
         seed=42,
+        plot_losses=True
     )
 
     assert isinstance(result, torch.Tensor)
     assert result.shape == dummy_tensor.shape
+
+
+def test_style_transfer_no_plot(monkeypatch):
+    """Test style_transfer() with plotting disabled."""
+    dummy_tensor = torch.rand(1, 3, 256, 256)
+    monkeypatch.setattr(
+        stv_image_io, "load_image_to_tensor",
+        lambda *a, **kw: dummy_tensor
+    )
+    monkeypatch.setattr(
+        stv_core_model, "prepare_model_and_input",
+        lambda *a, **kw: ("model", dummy_tensor.clone(), "optimizer")
+    )
+    monkeypatch.setattr(
+        stv_optimization, "run_optimization_loop",
+        lambda *a, **kw: (dummy_tensor.clone(), {"loss": [1.0]}, 3.14)
+    )
+    monkeypatch.setattr(
+        stv_utils, "save_outputs",
+        lambda *a, **kw: None
+    )
+    monkeypatch.setattr(
+        stv_utils, "setup_output_directory",
+        lambda x: Path("mock_output").resolve().mkdir(
+            parents=True, exist_ok=True) or Path("mock_output")
+    )
+    monkeypatch.setattr(
+        stv_utils, "validate_input_paths",
+        lambda *a, **kw: None
+    )
+
+    result = stv_main.style_transfer(
+        content_path="dummy.jpg",
+        style_path="dummy2.jpg",
+        plot_losses=False
+    )
+    assert isinstance(result, torch.Tensor)
 
 
 def expected_video_path(
@@ -199,7 +237,8 @@ def apply_mock(monkeypatch: pytest.MonkeyPatch) -> None:
         style_name: str,
         video_name: Optional[str] = None,
         normalize: bool = True,
-        video_created: bool = True
+        video_created: bool = True,
+        plot_losses: bool = True
     ) -> None:
         if video_created:
             video_path = Path(output_dir) / video_name
