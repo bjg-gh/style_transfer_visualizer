@@ -18,6 +18,7 @@ A command-line tool that applies neural style transfer to images using PyTorch. 
 - Save intermediate steps or final image only
 - Deterministic execution with `--seed`
 - Unit and integration tests with full coverage
+- Optional CSV loss logging for long runs
 
 ---
 
@@ -61,6 +62,63 @@ python run_visualizer.py --content path/to/content.jpg --style path/to/style.jpg
 - `--device cpu|cuda`
 - `--seed`
 - `--config config.toml`
+- `--log-loss path/to/losses.csv` (log loss metrics to CSV)
+- `--log-every N` (log every N steps, default: 10)
+
+---
+
+## 📄 Loss Logging Options
+
+The Style Transfer Visualizer supports two methods for tracking loss metrics during optimization:
+
+### ✅ In-Memory Loss Tracking (Default)
+
+By default, all loss metrics (style, content, and total loss) are stored in memory. At the end of the run, a loss plot is generated using matplotlib and saved to the output directory:
+
+```
+loss_plot.png
+```
+
+---
+
+### 📄 CSV Loss Logging (Optional)
+
+For long runs, storing all losses in memory may be inefficient. You can log loss metrics directly to a CSV file using the `--log-loss` flag:
+
+```bash
+python run_visualizer.py   --content input.jpg   --style style.jpg   --log-loss losses.csv   --log-every 50
+```
+
+- `--log-loss`: Path to the CSV file for logging losses.
+- `--log-every`: Interval for logging losses (default: 10 steps).
+
+When CSV logging is enabled:
+
+- ✅ Loss metrics are written to disk.
+- ✅ Loss plots are **automatically disabled**.
+- ✅ Memory usage is reduced for long runs.
+
+---
+
+### 📄 CSV Format
+
+The CSV file contains these columns:
+
+| Column         | Description                                         |
+| -------------- | --------------------------------------------------- |
+| `step`         | The optimization step number                        |
+| `style_loss`   | Style loss value at this step                       |
+| `content_loss` | Content loss value at this step                     |
+| `total_loss`   | Total loss (weighted sum of style and content loss) |
+
+Example:
+
+```csv
+step,style_loss,content_loss,total_loss
+10,1234.56,78.90,1313.46
+20,1150.34,70.12,1220.46
+30,1080.12,65.78,1145.90
+```
 
 ---
 
@@ -80,6 +138,7 @@ style_transfer_visualizer/
 │       ├── core_model.py
 │       ├── image_io.py
 │       ├── logging_utils.py
+│       ├── loss_logger.py         # Handles CSV loss logging
 │       ├── main.py
 │       ├── optimization.py
 │       ├── types.py

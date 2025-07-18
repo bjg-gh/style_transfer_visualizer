@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from style_transfer_visualizer.logging_utils import logger
+from style_transfer_visualizer.config_defaults import DEFAULT_LOG_EVERY
 import style_transfer_visualizer.config as stv_config
 import style_transfer_visualizer.main as stv_main
 
@@ -36,6 +37,21 @@ Note:
         default=argparse.SUPPRESS)
     output.add_argument("--no-plot", action="store_true",
                         help = "Disable loss plotting")
+    output.add_argument(
+        "--log-loss", type=str,
+        help=(
+            "Path to CSV file for logging loss metrics. When enabled, "
+            "loss metrics are written directly to disk instead of kept in "
+            "memory, and matplotlib loss plotting is automatically disabled."
+        )
+    )
+    output.add_argument(
+        "--log-every", type=int, default=DEFAULT_LOG_EVERY,
+        help=(
+            "Log losses to CSV every N steps (default: "
+            f"{DEFAULT_LOG_EVERY}). Ignored if --log-loss is not set."
+        )
+    )
 
     opt = p.add_argument_group("optimization")
     opt.add_argument(
@@ -160,6 +176,8 @@ def run_from_args(args: argparse.Namespace):
         "content_path": args.content,
         "style_path": args.style,
         "output_dir": get("output", "output"),
+        "log_loss_path": getattr(args, "log_loss", None),
+        "log_every": get("log_every", "output"),
         "steps": get("steps", "optimization"),
         "save_every": get("save_every", "video"),
         "style_weight": get("style_w", "optimization"),
@@ -178,6 +196,14 @@ def run_from_args(args: argparse.Namespace):
         "seed": get("seed", "optimization"),
         "plot_losses": not getattr(args, "no_plot", False)
     }
+
+    # Disable loss plotting if CSV logging is active
+    if params["log_loss_path"] and params["plot_losses"]:
+        logger.warning(
+            "Loss plotting is disabled because CSV logging is enabled. "
+            "Only loss CSV will be created."
+        )
+        params["plot_losses"] = False
 
     log_parameters(params, args)
 

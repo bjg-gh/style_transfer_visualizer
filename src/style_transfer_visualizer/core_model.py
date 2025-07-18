@@ -13,8 +13,8 @@ from style_transfer_visualizer.constants import (
     GRAM_MATRIX_CLAMP_MAX
 )
 from style_transfer_visualizer.config_defaults import (
-    STYLE_LAYER_DEFAULTS,
-    CONTENT_LAYER_DEFAULTS
+    DEFAULT_STYLE_LAYERS,
+    DEFAULT_CONTENT_LAYERS
 )
 from style_transfer_visualizer.types import InitMethod, TensorList
 
@@ -299,8 +299,8 @@ def prepare_model_and_input(
     device: torch.device,
     init_method: InitMethod = "random",
     learning_rate: float = 1.0,
-    style_layers: list[int] = STYLE_LAYER_DEFAULTS,
-    content_layers: list[int] = CONTENT_LAYER_DEFAULTS
+    style_layers: list[int] = DEFAULT_STYLE_LAYERS,
+    content_layers: list[int] = DEFAULT_CONTENT_LAYERS
 ) -> Tuple[nn.Module, torch.Tensor, torch.optim.Optimizer]:
     """Initialize the model and input image for style transfer.
 

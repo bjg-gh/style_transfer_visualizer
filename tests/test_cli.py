@@ -102,6 +102,19 @@ class TestCLIArgumentParsing:
         assert captured["style_layers"] == expected_style
         assert captured["content_layers"] == expected_content
 
+    def test_log_loss_and_log_every_flags(self):
+        """Test that --log-loss and --log-every are parsed correctly."""
+        parser = stv_cli.build_arg_parser()
+        args = parser.parse_args([
+            "--content", "cat.jpg",
+            "--style", "mosaic.jpg",
+            "--log-loss", "losses.csv",
+            "--log-every", "25"
+        ])
+
+        assert args.log_loss == "losses.csv"
+        assert args.log_every == 25
+
 
 class TestCLIRunFromArgs:
     def test_config_only_mode(self, monkeypatch: Any, tmp_path: Path):
@@ -240,6 +253,46 @@ device = "cuda"
         assert isinstance(result, torch.Tensor)
         assert captured["output_dir"] == "config_out"
         assert captured["steps"] == 123
+
+    def test_plot_disabled_when_log_loss_set(
+        self, monkeypatch: Any, caplog
+    ):
+        """Test plot_losses is disabled and warning logged when log_loss is active."""
+        args = argparse.Namespace(
+            content="cat.jpg",
+            style="wave.jpg",
+            config=None,
+            validate_config_only=False,
+            output=DEFAULT_OUTPUT_DIR,
+            steps=DEFAULT_STEPS,
+            save_every=DEFAULT_SAVE_EVERY,
+            style_w=DEFAULT_STYLE_WEIGHT,
+            content_w=DEFAULT_CONTENT_WEIGHT,
+            lr=DEFAULT_LEARNING_RATE,
+            fps=DEFAULT_FPS,
+            init_method=DEFAULT_INIT_METHOD,
+            no_normalize=False,
+            no_video=False,
+            no_plot=False,  # This is NOT set, but --log-loss should disable plotting
+            final_only=False,
+            quality=DEFAULT_VIDEO_QUALITY,
+            seed=DEFAULT_SEED,
+            device=DEFAULT_DEVICE,
+            log_loss="losses.csv",
+            log_every=10,
+        )
+
+        captured = {}
+        monkeypatch.setattr(stv_main, "style_transfer",
+                            lambda **kwargs:
+                            captured.update(kwargs) or torch.rand(1))
+        monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
+
+        caplog.set_level("WARNING")
+        stv_cli.run_from_args(args)
+
+        assert captured["plot_losses"] is False
+        assert "Loss plotting is disabled because CSV logging is enabled" in caplog.text
 
 
 class TestLogParameters:

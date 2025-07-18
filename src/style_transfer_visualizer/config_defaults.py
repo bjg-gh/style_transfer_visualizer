@@ -12,8 +12,8 @@ DEFAULT_NORMALIZE = True
 # See:
 # https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py
 # https://medium.com/@ferlatti.aldo/neural-style-transfer-nst-theory-and-implementation-c26728cf969d
-STYLE_LAYER_DEFAULTS = [0, 5, 10, 19, 28]
-CONTENT_LAYER_DEFAULTS = [21]
+DEFAULT_STYLE_LAYERS = [0, 5, 10, 19, 28]
+DEFAULT_CONTENT_LAYERS = [21]
 
 # Video
 DEFAULT_SAVE_EVERY = 20
@@ -26,4 +26,5 @@ DEFAULT_FINAL_ONLY = False
 DEFAULT_DEVICE = "cuda"
 
 # Output
+DEFAULT_LOG_EVERY = 10
 DEFAULT_OUTPUT_DIR = "out"
