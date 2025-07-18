@@ -1,7 +1,7 @@
 """Top-level orchestration for style transfer logic."""
 
 from pathlib import Path
-from typing import cast
+from typing import cast, Optional
 
 import torch
 
@@ -10,7 +10,8 @@ from style_transfer_visualizer.config_defaults import (
     DEFAULT_STYLE_WEIGHT, DEFAULT_CONTENT_WEIGHT, DEFAULT_LEARNING_RATE,
     DEFAULT_INIT_METHOD, DEFAULT_SEED, DEFAULT_NORMALIZE, DEFAULT_FPS,
     DEFAULT_VIDEO_QUALITY, DEFAULT_CREATE_VIDEO, DEFAULT_FINAL_ONLY,
-    DEFAULT_DEVICE, CONTENT_LAYER_DEFAULTS, STYLE_LAYER_DEFAULTS
+    DEFAULT_DEVICE, DEFAULT_CONTENT_LAYERS, DEFAULT_STYLE_LAYERS,
+    DEFAULT_LOG_EVERY
 )
 import style_transfer_visualizer.core_model as stv_core_model
 import style_transfer_visualizer.image_io as stv_image_io
@@ -29,8 +30,8 @@ def style_transfer(
     style_weight: float = DEFAULT_STYLE_WEIGHT,
     content_weight: float = DEFAULT_CONTENT_WEIGHT,
     learning_rate: float = DEFAULT_LEARNING_RATE,
-    style_layers: list[int] = STYLE_LAYER_DEFAULTS,
-    content_layers: list[int] = CONTENT_LAYER_DEFAULTS,
+    style_layers: list[int] = DEFAULT_STYLE_LAYERS,
+    content_layers: list[int] = DEFAULT_CONTENT_LAYERS,
     fps: int = DEFAULT_FPS,
     device_name: str = DEFAULT_DEVICE,
     init_method: str = DEFAULT_INIT_METHOD,
@@ -39,7 +40,9 @@ def style_transfer(
     final_only: bool = DEFAULT_FINAL_ONLY,
     video_quality: int = DEFAULT_VIDEO_QUALITY,
     seed: int = DEFAULT_SEED,
-    plot_losses: bool = True
+    plot_losses: bool = True,
+    log_loss_path: Optional[str] = None,
+    log_every: int = DEFAULT_LOG_EVERY
 ) -> torch.Tensor:
     """
     Orchestrates the full style transfer pipeline.
@@ -61,6 +64,9 @@ def style_transfer(
         final_only: Whether to only save the final image
         video_quality: Quality setting for output video (1-10)
         seed: Random seed for reproducibility
+        plot_losses: Whether to plot losses via matplotlib
+        log_loss_path: Path to log loss
+        log_every: Log every N steps
 
     Returns:
         The final stylized image tensor
@@ -109,7 +115,7 @@ def style_transfer(
     input_img, loss_metrics, elapsed = stv_optimizer.run_optimization_loop(
         model, input_img, optimizer,
         steps, save_every, style_weight,
-        content_weight, normalize, video_writer
+        content_weight, normalize, video_writer, log_loss_path, log_every
     )
 
     # Clean up and save outputs

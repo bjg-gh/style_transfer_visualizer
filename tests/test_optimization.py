@@ -180,3 +180,95 @@ class TestOptimization:
         assert "style_loss" in metrics
         assert isinstance(elapsed, float)
         assert elapsed >= 0
+
+    def test_run_optimization_loop_uses_csv_logger(
+        self, setup_model_and_images, mocker
+    ):
+        """Test that LossCSVLogger is initialized and used when
+           log_loss_path is set."""
+        model, _, _, input_img = setup_model_and_images
+        optimizer = torch.optim.Adam([input_img])
+
+        # Patch LossCSVLogger to mock actual file writing
+        mock_logger = mocker.patch(
+            "style_transfer_visualizer.optimization.LossCSVLogger",
+            autospec=True
+        )
+
+        result_img, metrics, elapsed = stv_optimization.run_optimization_loop(
+            model, input_img, optimizer,
+            steps=2, save_every=1, style_weight=1.0,
+            content_weight=1.0, normalize=True, video_writer=None,
+            log_loss_path="losses.csv", log_every=1
+        )
+
+        # Assert CSV logger lifecycle
+        mock_logger.assert_called_once_with("losses.csv", 1)
+        assert mock_logger.return_value.log.called
+        assert mock_logger.return_value.close.called
+        # No in-memory metrics
+        assert metrics == {}
+
+    def test_run_optimization_loop_in_memory_metrics(
+        self, setup_model_and_images
+    ):
+        """Test metrics are stored in memory when CSV logging is off."""
+        model, _, _, input_img = setup_model_and_images
+        optimizer = torch.optim.Adam([input_img])
+
+        result_img, metrics, elapsed = stv_optimization.run_optimization_loop(
+            model, input_img, optimizer,
+            steps=2, save_every=1, style_weight=1.0,
+            content_weight=1.0, normalize=True, video_writer=None
+        )
+
+        assert isinstance(metrics, dict)
+        assert "style_loss" in metrics
+        assert len(metrics["style_loss"]) > 0
+
+    def test_csv_logger_initialization_failure_logs_error(
+        self, setup_model_and_images, mocker, caplog
+    ):
+        """Test that OSError during LossCSVLogger init is logged and
+           fallback occurs."""
+        model, _, _, input_img = setup_model_and_images
+        optimizer = torch.optim.Adam([input_img])
+
+        # Patch LossCSVLogger to raise OSError
+        mocker.patch(
+            "style_transfer_visualizer.optimization.LossCSVLogger",
+            side_effect=OSError("Mocked failure")
+        )
+
+        caplog.set_level("ERROR")
+
+        # Run optimization loop with CSV logging
+        result_img, metrics, elapsed = stv_optimization.run_optimization_loop(
+            model, input_img, optimizer,
+            steps=1, save_every=1, style_weight=1.0,
+            content_weight=1.0, normalize=True, video_writer=None,
+            log_loss_path="losses.csv", log_every=1
+        )
+
+        # Should fallback to in-memory logging
+        assert isinstance(metrics, dict)
+        assert "Failed to initialize CSV logging" in caplog.text
+
+    def test_long_run_warning_when_no_csv_logging(
+        self, setup_model_and_images, caplog
+    ):
+        """Test that a warning is logged for long runs without CSV
+           logging."""
+        model, _, _, input_img = setup_model_and_images
+        optimizer = torch.optim.Adam([input_img])
+
+        caplog.set_level("WARNING")
+
+        stv_optimization.run_optimization_loop(
+            model, input_img, optimizer,
+            steps=2500,  # > 2000 triggers warning
+            save_every=500, style_weight=1.0,
+            content_weight=1.0, normalize=True, video_writer=None
+        )
+
+        assert "Long run detected" in caplog.text
