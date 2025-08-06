@@ -13,6 +13,7 @@ Simulates CLI usage with monkeypatching and verifies end-to-end flow.
 """
 
 import argparse
+import os
 import subprocess
 import sys
 from contextlib import suppress
@@ -573,6 +574,9 @@ def test_script_main_entry(tmp_path: Path) -> None:
 
     Image.new("RGB", (64, 64), color="blue").save(content)
     Image.new("RGB", (64, 64), color="green").save(style)
+
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path(__file__).parent.parent / "src")
 
     result = subprocess.run(  # noqa: S603 - trusted subprocess call to Python CLI
         [
