@@ -199,7 +199,7 @@ This issue tracks the version bump, tagging, and release publishing steps for `v
 
 ---
 
-**Milestone:** `vX.X.X`  
+**Milestone:** `vX.X.X`
 **Labels:** `release`, `chore`
 
 ### 🔄 Pre-Release Version Bumps
@@ -213,9 +213,9 @@ __version__ = "1.1.0.dev0"
 ```
 
 #### Steps:
-1. Create a GitHub Issue  
-   - Title: `chore: bump version to 1.1.0.dev0`  
-   - Label: `chore`  
+1. Create a GitHub Issue
+   - Title: `chore: bump version to 1.1.0.dev0`
+   - Label: `chore`
    - Milestone: target version (e.g., `v1.1 – Core Refactor`)
 
 2. Create a branch (e.g., `50-chore-bump-version-1.1.0-dev0`)
@@ -227,12 +227,12 @@ __version__ = "1.1.0.dev0"
    git commit -m "chore: bump version to 1.1.0.dev0"
    ```
 
-5. Open a PR with title:  
+5. Open a PR with title:
    ```
    chore: bump version to 1.1.0.dev0
    ```
    Include `Closes #<issue-number>` in the PR body
 
-6. Squash and merge  
-7. Delete the branch  
+6. Squash and merge
+7. Delete the branch
 8. Move the issue to `Done`

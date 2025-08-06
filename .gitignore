@@ -1,35 +1,101 @@
-# Bytecode and cache files
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.cache/
+*.py[cod]
+*$py.class
 
-# Logs and coverage
-*.log
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
 .coverage
+.coverage.*
+.cache
+.tox/
+.nox/
 htmlcov/
 coverage_html_report/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+.benchmarks/
+
+# Logs
+*.log
 
 # Media outputs (images, videos)
 *.mp4
 *.png
 *.jpg
 *.jpeg
-style_transfer_output/
 out/
 
 # Virtual environments
+.env
+.venv
+env/
 venv/
+ENV/
+env.bak/
+venv.bak/
 
 # IDE config
 *.iml
 *.idea/
 
-# Testing tools and reports
-.benchmarks/
-.hypothesis/
-googlepylintrc
+# Environments
+.python-version
 
-# External tools and artifacts
-.zencoder/
+# PyBuilder
+target/
+
+# IPython
+profile_default/
+ipython_config.py
+
+# PEP 582
+__pypackages__/
+
+# MkDocs
+/site
+
+# Type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+
+# Google style guide file
+googlepylintrc

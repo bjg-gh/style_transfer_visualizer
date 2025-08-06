@@ -1,13 +1,19 @@
 # Style Transfer Visualizer
+
 ![Python CI](https://github.com/bjg-gh/style_transfer_visualizer/actions/workflows/python-ci.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![codecov](https://codecov.io/gh/bjg-gh/style_transfer_visualizer/branch/ci-test/graph/badge.svg)](https://codecov.io/gh/bjg-gh/style_transfer_visualizer)
 ![GitHub Release](https://img.shields.io/github/v/release/bjg-gh/style_transfer_visualizer?sort=semver)
 [![Release Notes](https://img.shields.io/badge/Release_Notes-📄%20View-blue)](./RELEASES.md)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
+[![Ruff](https://img.shields.io/badge/code%20style-ruff-005f73?logo=python&logoColor=white)](https://docs.astral.sh/ruff/)
+[![Mypy](https://img.shields.io/badge/types-checked-blue?logo=python&logoColor=white)](http://mypy-lang.org/)
 
 **Author**: [@bjg-gh](https://github.com/bjg-gh)
 
 A command-line tool that applies neural style transfer to images using PyTorch. It supports timelapse video generation, configuration via CLI or TOML, and flexible output control.
+
+---
 
 ## Features
 
@@ -34,13 +40,29 @@ venv\Scripts\activate
 Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+pip install -e .[dev]
 ```
 
-For CUDA support (recommended), use:
+---
+
+## Development Setup
+
+Install and enable pre-commit hooks:
 
 ```bash
-pip install -r requirements-cuda.txt
+pre-commit install
+```
+
+Run all pre-commit hooks manually:
+
+```bash
+pre-commit run --all-files
+```
+
+Check static types:
+
+```bash
+pre-commit run pyright --all-files
 ```
 
 ---
@@ -50,7 +72,7 @@ pip install -r requirements-cuda.txt
 Run the tool from the command line:
 
 ```bash
-python run_visualizer.py --content path/to/content.jpg --style path/to/style.jpg
+style-visualizer --content path/to/content.jpg --style path/to/style.jpg
 ```
 
 ### Common Options
@@ -67,11 +89,11 @@ python run_visualizer.py --content path/to/content.jpg --style path/to/style.jpg
 
 ---
 
-## 📄 Loss Logging Options
+## Loss Logging Options
 
 The Style Transfer Visualizer supports two methods for tracking loss metrics during optimization:
 
-### ✅ In-Memory Loss Tracking (Default)
+### In-Memory Loss Tracking (Default)
 
 By default, all loss metrics (style, content, and total loss) are stored in memory. At the end of the run, a loss plot is generated using matplotlib and saved to the output directory:
 
@@ -81,12 +103,12 @@ loss_plot.png
 
 ---
 
-### 📄 CSV Loss Logging (Optional)
+### CSV Loss Logging (Optional)
 
 For long runs, storing all losses in memory may be inefficient. You can log loss metrics directly to a CSV file using the `--log-loss` flag:
 
 ```bash
-python run_visualizer.py   --content input.jpg   --style style.jpg   --log-loss losses.csv   --log-every 50
+style-visualizer   --content input.jpg   --style style.jpg   --log-loss losses.csv   --log-every 50
 ```
 
 - `--log-loss`: Path to the CSV file for logging losses.
@@ -94,13 +116,13 @@ python run_visualizer.py   --content input.jpg   --style style.jpg   --log-loss 
 
 When CSV logging is enabled:
 
-- ✅ Loss metrics are written to disk.
-- ✅ Loss plots are **automatically disabled**.
-- ✅ Memory usage is reduced for long runs.
+- Loss metrics are written to disk.
+- Loss plots are **automatically disabled**.
+- Memory usage is reduced for long runs.
 
 ---
 
-### 📄 CSV Format
+### CSV Format
 
 The CSV file contains these columns:
 
@@ -126,12 +148,11 @@ step,style_loss,content_loss,total_loss
 
 ```
 style_transfer_visualizer/
-├── run_visualizer.py              # Entry point
-├── __version__.py                 # Version string
+├── pyproject.toml                 # Project configuration
 ├── config.toml                    # Example config
 ├── src/
 │   └── style_transfer_visualizer/
-│       ├── cli.py
+│       ├── cli.py                # CLI entry point
 │       ├── config.py
 │       ├── config_defaults.py
 │       ├── constants.py
@@ -151,7 +172,6 @@ style_transfer_visualizer/
 │   ├── test_image_io.py
 │   ├── test_main.py
 │   ├── test_optimization.py
-│   ├── test_run_visualizer.py
 │   ├── test_utils.py
 │   ├── test_video.py
 │   └── conftest.py
@@ -161,16 +181,12 @@ style_transfer_visualizer/
 
 ## Testing
 
+Test suite includes full unit and integration coverage (100%).
+
 Run all tests:
 
 ```bash
 pytest
-```
-
-Run with coverage:
-
-```bash
-pytest --cov=src/style_transfer_visualizer --cov-report=term --cov-report=html
 ```
 
 Open `htmlcov/index.html` in your browser for a visual coverage report.
