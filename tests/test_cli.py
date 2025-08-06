@@ -568,14 +568,6 @@ class TestCLIMainFlow:
 @pytest.mark.integration
 def test_script_main_entry(tmp_path: Path) -> None:
     """Integration test: execute script via subprocess with real images."""
-    script = (
-        Path(__file__).parent.parent
-        / "src"
-        / "style_transfer_visualizer"
-        / "cli.py"
-    ).resolve()
-    cwd = Path(__file__).parent.parent.resolve()
-
     content = tmp_path / "content.jpg"
     style = tmp_path / "style.jpg"
 
@@ -585,7 +577,8 @@ def test_script_main_entry(tmp_path: Path) -> None:
     result = subprocess.run(  # noqa: S603 - trusted subprocess call to Python CLI
         [
             sys.executable,
-            str(script),
+            "-m",
+            "style_transfer_visualizer.cli",
             "--content",
             str(content),
             "--style",
@@ -602,7 +595,7 @@ def test_script_main_entry(tmp_path: Path) -> None:
         ],
         capture_output=True,
         text=True,
-        cwd=cwd,
+        cwd=Path(__file__).parent.parent.resolve(),
         timeout=180,
         check=False,
     )
