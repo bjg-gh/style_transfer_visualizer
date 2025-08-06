@@ -2,3 +2,6 @@ pytest~=8.3.5
 pytest-cov~=4.1.0
 pytest-mock~=3.14.0
 hypothesis~=6.131.19
+pyright~=1.1.403
+ruff~=0.12.4
+pre-commit~=4.2.0

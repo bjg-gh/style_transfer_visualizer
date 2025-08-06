@@ -1,26 +1,37 @@
-"""Utility functions: logging, seeding, validation, device setup, output path."""
+"""
+Utility functions for common tasks in the style transfer pipeline.
+
+Includes helpers for device selection, input validation, directory
+management, loss plotting, and other shared operations.
+"""
+
 
 import random
+from collections.abc import Callable
 from pathlib import Path
-from typing import Optional
 
-import numpy as np
 import torch
 from torchvision.utils import save_image
 
-from style_transfer_visualizer.logging_utils import logger
-from style_transfer_visualizer.types import LossMetrics
 import style_transfer_visualizer.image_io as stv_image_io
+from style_transfer_visualizer.constants import (
+    VIDEO_QUALITY_MAX,
+    VIDEO_QUALITY_MIN,
+)
+from style_transfer_visualizer.logging_utils import logger
+from style_transfer_visualizer.type_defs import LossHistory
 
 
 def setup_device(device_name: str) -> torch.device:
-    """Set up the device for computation.
+    """
+    Set up the device for computation.
 
     Args:
         device_name: Device to run on ("cuda" or "cpu")
 
     Returns:
         torch.device: The device to use
+
     """
     if device_name == "cuda" and not torch.cuda.is_available():
         logger.warning(
@@ -34,7 +45,8 @@ def setup_device(device_name: str) -> torch.device:
 
 
 def setup_random_seed(seed: int) -> None:
-    """Sets random seeds for all libraries.
+    """
+    Set random seeds for all libraries.
 
     Ensures deterministic behavior by setting seeds for PyTorch (both
     CPU and CUDA), Python's random module, and NumPy. This is important
@@ -42,47 +54,57 @@ def setup_random_seed(seed: int) -> None:
 
     Args:
         seed: Random seed value used for all random number generators
+
     """
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
     random.seed(seed)  # Python's seed
-    np.random.seed(seed)
+
+    # Numpy random isn't used in the code (yet). If it's ever added,
+    # change this function to return a numpy.random.Generator and
+    # return something like this: np.random.default_rng(seed)
 
 
 def validate_input_paths(content_path: str, style_path: str) -> None:
     """Validate that the content and style image paths exist."""
     if not Path(content_path).is_file():
-        raise FileNotFoundError(f"Content image not found: {content_path}")
+        msg = f"Content image not found: {content_path}"
+        raise FileNotFoundError(msg)
     if not Path(style_path).is_file():
-        raise FileNotFoundError(f"Style image not found: {style_path}")
+        msg = f"Style image not found: {style_path}"
+        raise FileNotFoundError(msg)
 
 
 def validate_parameters(video_quality: int) -> None:
-    """Validates that parameters fall within acceptable ranges.
-
-        Currently only checks video quality, but can be expanded to validate
-        other parameters as the function signature suggests.
     """
-    if video_quality < 1 or video_quality > 10:
-        raise ValueError(
-            f"Video quality must be between 1 and 10, got {video_quality}")
+    Validate that parameters fall within acceptable ranges.
+
+    Currently only checks video quality, but can be expanded to validate
+    other parameters as the function signature suggests.
+    """
+    if video_quality < VIDEO_QUALITY_MIN or video_quality > VIDEO_QUALITY_MAX:
+        msg = f"Video quality must be between 1 and 10, got {video_quality}"
+        raise ValueError(msg)
 
 
-def setup_output_directory(output_path: str, path_factory=Path) -> Path:
+def setup_output_directory(
+    output_path: str,
+    path_factory: Callable[[str], Path] = Path,
+) -> Path:
     """Create and return the output directory path."""
-    output_path = path_factory(output_path)
+    resolved_path = path_factory(output_path)
     try:
-        output_path.mkdir(parents=True, exist_ok=True)
-    except Exception:
+        resolved_path.mkdir(parents=True, exist_ok=True)
+    except OSError:
         fallback_path = path_factory("style_transfer_output")
         fallback_path.mkdir(parents=True, exist_ok=True)
         return fallback_path
-    return output_path
+    return resolved_path
 
 
-def plot_loss_curves(metrics: LossMetrics, output_dir: Path) -> None:
+def plot_loss_curves(metrics: LossHistory, output_dir: Path) -> None:
     """Save a matplotlib plot of training loss curves."""
     if not metrics:
         logger.warning("No loss metrics dictionary provided.")
@@ -93,7 +115,7 @@ def plot_loss_curves(metrics: LossMetrics, output_dir: Path) -> None:
         return
 
     try: # import is here because this functionality is optional
-        import matplotlib.pyplot as plt  # pylint: disable=import-outside-toplevel
+        import matplotlib.pyplot as plt  # noqa: PLC0415
     except ImportError:
         logger.warning("matplotlib not found: skipping loss plot.")
         return
@@ -115,17 +137,18 @@ def plot_loss_curves(metrics: LossMetrics, output_dir: Path) -> None:
         plt.close(fig)  # Ensure figure is closed to prevent memory leaks
 
 
-def save_outputs(
+def save_outputs(  # noqa: PLR0913
     input_img: torch.Tensor,
-    loss_metrics: LossMetrics,
+    loss_metrics: LossHistory,
     output_dir: Path,
     elapsed: float,
     content_name: str,
     style_name: str,
-    video_name: Optional[str] = None,
+    video_name: str | None = None,
+    *,
     normalize: bool = True,
     video_created: bool = True,
-    plot_losses: bool = True
+    plot_losses: bool = True,
 ) -> None:
     """Save final stylized image, optional video, and loss plot."""
     # Ensure output directory exists
@@ -143,7 +166,8 @@ def save_outputs(
 
     # Save the final stylized image
     final_path = output_dir / f"stylized_{content_name}_x_{style_name}.png"
-    img_to_save = stv_image_io.prepare_image_for_output(input_img, normalize)
+    img_to_save = stv_image_io.prepare_image_for_output(input_img,
+                                                        normalize=normalize)
     save_image(img_to_save, final_path)
 
     # Log video information

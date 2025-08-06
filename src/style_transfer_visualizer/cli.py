@@ -3,27 +3,37 @@
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
-from style_transfer_visualizer.logging_utils import logger
-from style_transfer_visualizer.config_defaults import DEFAULT_LOG_EVERY
 import style_transfer_visualizer.config as stv_config
 import style_transfer_visualizer.main as stv_main
+from style_transfer_visualizer.config_defaults import DEFAULT_LOG_EVERY
+from style_transfer_visualizer.constants import (
+    VIDEO_QUALITY_MAX,
+    VIDEO_QUALITY_MIN,
+)
+from style_transfer_visualizer.logging_utils import logger
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
     """Construct the argument parser for the command-line interface."""
-
     p = argparse.ArgumentParser(
         description="Neural Style Transfer with PyTorch",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=f"""Examples:
-python {Path(__file__).name} --content cat.jpg --style starry_night.jpg
-python {Path(__file__).name} --content cat.jpg --style starry_night.jpg --final-only
-python {Path(__file__).name} --content cat.jpg --style starry_night.jpg --steps 1000 --fps 30
-
-Note:
-  Normalization is enabled by default. Use --no-normalize to disable it"""
+        epilog=(
+            f"Examples:\n"
+            f"python {Path(__file__).name} --content cat.jpg "
+            f"--style starry_night.jpg\n"
+            f"python {Path(__file__).name} --content cat.jpg "
+            f"--style starry_night.jpg --final-only\n"
+            f"python {Path(__file__).name} --content cat.jpg "
+            f"--style starry_night.jpg --steps 1000 --fps 30\n\n"
+            "Note:\n"
+            "  Normalization is enabled by default. "
+            "Use --no-normalize to disable it"
+        ),
     )
+
 
     required = p.add_argument_group("required arguments")
     required.add_argument(
@@ -43,14 +53,14 @@ Note:
             "Path to CSV file for logging loss metrics. When enabled, "
             "loss metrics are written directly to disk instead of kept in "
             "memory, and matplotlib loss plotting is automatically disabled."
-        )
+        ),
     )
     output.add_argument(
         "--log-every", type=int, default=DEFAULT_LOG_EVERY,
         help=(
             "Log losses to CSV every N steps (default: "
             f"{DEFAULT_LOG_EVERY}). Ignored if --log-loss is not set."
-        )
+        ),
     )
 
     opt = p.add_argument_group("optimization")
@@ -118,8 +128,8 @@ Note:
     return p
 
 
-def log_parameters(p: dict, args: argparse.Namespace) -> None:
-    """Logs all user-provided command-line parameters."""
+def log_parameters(p: dict[str, Any], args: argparse.Namespace) -> None:
+    """Log all user-provided command-line parameters."""
     logger.info("Content image loaded: %s", p["content_path"])
     logger.info("Style image loaded: %s", p["style_path"])
     if hasattr(args, "config"):
@@ -133,7 +143,8 @@ def log_parameters(p: dict, args: argparse.Namespace) -> None:
     logger.info("Style Layers: %s", p["style_layers"])
     logger.info("Content Layers: %s", p["content_layers"])
     logger.info("FPS for Timelapse Video: %d", p["fps"])
-    logger.info("Video Quality: %d (1–10 scale)", p["video_quality"])
+    logger.info("Video Quality: %d (%d-%d scale)", p["video_quality"],
+                VIDEO_QUALITY_MIN, VIDEO_QUALITY_MAX)
     logger.info("Initialization Method: %s", p["init_method"])
     logger.info("Normalization: %s",
                 "Enabled" if p["normalize"] else "Disabled")
@@ -145,20 +156,22 @@ def log_parameters(p: dict, args: argparse.Namespace) -> None:
 
 
 def parse_int_list(s: str | list[int]) -> list[int]:
-    """Convert a comma-separated string or list of ints into a list of ints.
+    """
+    Convert a comma-separated string or list of ints into a list of ints.
 
     Args:
         s: A string like "0,1,2" or a list of integers.
 
     Returns:
         A list of integers.
+
     """
     if isinstance(s, list):
         return s
     return list(map(int, s.split(",")))
 
 
-def run_from_args(args: argparse.Namespace):
+def run_from_args(args: argparse.Namespace) -> None:
     """Run style transfer from command-line arguments."""
     config = stv_config.StyleTransferConfig()
     if args.config:
@@ -167,12 +180,12 @@ def run_from_args(args: argparse.Namespace):
             logger.info("Config %s validated successfully.", args.config)
             sys.exit(0)
 
-    def get(attr, section):
+    def get(attr: str, section: str) -> Any: # noqa: ANN401
         if hasattr(args, attr) and getattr(args, attr) is not None:
             return getattr(args, attr)
         return getattr(getattr(config, section), attr)
 
-    params = {
+    params: dict[str, Any] = {
         "content_path": args.content,
         "style_path": args.style,
         "output_dir": get("output", "output"),
@@ -194,24 +207,24 @@ def run_from_args(args: argparse.Namespace):
         "final_only": getattr(args, "final_only", False),
         "video_quality": get("quality", "video"),
         "seed": get("seed", "optimization"),
-        "plot_losses": not getattr(args, "no_plot", False)
+        "plot_losses": not getattr(args, "no_plot", False),
     }
 
     # Disable loss plotting if CSV logging is active
     if params["log_loss_path"] and params["plot_losses"]:
         logger.warning(
             "Loss plotting is disabled because CSV logging is enabled. "
-            "Only loss CSV will be created."
+            "Only loss CSV will be created.",
         )
         params["plot_losses"] = False
 
     log_parameters(params, args)
 
-    return stv_main.style_transfer(**params)
+    stv_main.style_transfer(**params)
 
 
 def main() -> None:
-    """Main entry point for the CLI."""
+    """Run the command-line interface for style transfer execution."""
     arg_parser = build_arg_parser()
     args = arg_parser.parse_args()
     if not args.validate_config_only and (not args.content or not args.style):
@@ -219,3 +232,7 @@ def main() -> None:
                          " --style")
 
     run_from_args(args)
+
+
+if __name__ == "__main__":
+    main()

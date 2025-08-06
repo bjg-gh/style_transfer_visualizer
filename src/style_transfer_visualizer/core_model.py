@@ -1,66 +1,73 @@
-"""Core model logic:
- StyleContentModel, Gram matrix, input initialization.
+"""
+Core model components for neural style transfer.
+
+Defines the StyleContentModel, a neural module that extracts feature
+representations from VGG19 and computes style and content losses during
+optimization. This module serves as the backbone for the style transfer
+loop, separating content and style objectives across configurable
+layers.
+
+Classes:
+    StyleContentModel: Computes activations and losses for content and
+    style layers using a frozen VGG19 encoder.
 """
 
-from typing import Optional, Tuple
-
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torchvision.models import vgg19, VGG19_Weights
+from torch import nn
+from torch.nn.functional import mse_loss
+from torchvision.models import VGG19_Weights, vgg19
 
-from style_transfer_visualizer.constants import (
-    GRAM_MATRIX_CLAMP_MAX
-)
 from style_transfer_visualizer.config_defaults import (
+    DEFAULT_CONTENT_LAYERS,
     DEFAULT_STYLE_LAYERS,
-    DEFAULT_CONTENT_LAYERS
 )
-from style_transfer_visualizer.types import InitMethod, TensorList
+from style_transfer_visualizer.constants import GRAM_MATRIX_CLAMP_MAX
+from style_transfer_visualizer.type_defs import InitMethod, TensorList
 
 
 def gram_matrix(
     tensor: torch.Tensor,
-    clamp_max: float = GRAM_MATRIX_CLAMP_MAX
+    clamp_max: float = GRAM_MATRIX_CLAMP_MAX,
 ) -> torch.Tensor:
-    """Computes Gram matrix from feature activations for style
-    representation.
+    """
+    Compute the Gram matrix from feature activations.
 
-    The Gram matrix captures style information by measuring feature
-    correlations. Values are clamped to prevent numerical instability
-    during backpropagation.
+    The Gram matrix captures style by measuring channel-wise feature
+    correlations. Values are clamped to a maximum threshold to reduce
+    the risk of exploding gradients during backpropagation.
 
-    Note on dimensions: This implementation flattens the batch dimension
-    into the channel dimension before computing the Gram matrix. This
-    means a 4D input tensor of shape [batch, channels, height, width]
-    results in a 2D Gram matrix of shape [channels, channels], with
-    batch information integrated into the correlation values. This
-    approach is optimized for single-image style transfer where batch=1.
+    This implementation flattens the batch dimension into the channel
+    dimension before computing correlations. For a 4D input tensor of
+    shape [batch, channels, height, width], the output is a 2D tensor
+    of shape [channels, channels], with batch effects merged into the
+    correlation statistics.
 
     Args:
-        tensor: Feature tensor of shape [batch, channels, height, width]
-        clamp_max: Maximum value to clamp the matrix elements to prevent
-            numerical instability
+        tensor: Features with shape [batch, channels, height, width].
+        clamp_max: Maximum value for clamping matrix elements to ensure
+            numerical stability.
 
     Returns:
-        Normalized Gram matrix with correlation coefficients as a 2D
-        tensor of shape [channels, channels]
+        A 2D Gram matrix tensor of shape [channels, channels],
+        normalized and clamped.
+
     """
     b, c, h, w = tensor.size()
     features = tensor.reshape(b * c, h * w)
     # Clamp to prevent extremely large values that can cause numerical
     # instability
-    G = torch.mm(features, features.t()).clamp(max=clamp_max)  # pylint: disable=invalid-name
+    gram = torch.mm(features, features.t()).clamp(max=clamp_max)
 
     # Normalize by the total number of elements
-    return G.div(b * c * h * w)
+    return gram.div(b * c * h * w)
 
 
 def initialize_input(
     content_img: torch.Tensor,
-    method: InitMethod
+    method: InitMethod,
 ) -> torch.Tensor:
-    """Initialize input tensor for optimization via a specified method.
+    """
+    Initialize input tensor for optimization via a specified method.
 
     Args:
         content_img: Content image tensor to use as reference
@@ -72,11 +79,13 @@ def initialize_input(
     Raises:
         ValueError: If method is not one of the supported initialization
             methods
+
     """
     if not isinstance(content_img, torch.Tensor):
-        raise TypeError("Expected torch.Tensor,"
-                        f" got {type(content_img)}")
+        msg = f"Expected content_img to be a Tensor, got {type(content_img)}"
+        raise TypeError(msg)
 
+    input_img: torch.Tensor
     if method == "content":
         input_img = content_img.clone()
     elif method == "random":
@@ -84,34 +93,32 @@ def initialize_input(
     elif method == "white":
         input_img = torch.ones_like(content_img)
     else:
-        raise ValueError(
-            f"Unknown init method: {method}. Expected one of: content, "
-            f"random, white"
-        )
-    return input_img.requires_grad_(True)
+        msg = f"Unsupported initialization method: {method}"
+        raise ValueError(msg)
+
+    return input_img.requires_grad_(True)  # noqa: FBT003
 
 
 def initialize_vgg() -> nn.Module:
     """Load pretrained VGG19 model for feature extraction."""
     vgg = vgg19(weights=VGG19_Weights.IMAGENET1K_V1).features.eval()
     for p in vgg.parameters():
-        p.requires_grad_(False)
+        p.requires_grad_(False)  # noqa: FBT003
     return vgg
 
 
 def create_feature_blocks(
     vgg: nn.Module,
     style_layers: list[int],
-    content_layers: list[int]
+    content_layers: list[int],
 ) -> tuple[nn.ModuleList, list[int], list[int]]:
     """Extract sequential feature blocks from VGG19 by layer index."""
     vgg_blocks = nn.ModuleList()
     content_ids = []
     style_ids = []
 
-    i = 0
     block = nn.Sequential()
-    for layer in vgg.children():
+    for i, layer in enumerate(vgg.children()):
         block.add_module(str(i), layer)
 
         if isinstance(layer, nn.ReLU):
@@ -126,13 +133,12 @@ def create_feature_blocks(
         if i in content_layers:
             content_ids.append(len(vgg_blocks) - 1)
 
-        i += 1
-
     return vgg_blocks, content_ids, style_ids
 
 
 class StyleContentModel(nn.Module):
-    """Manages feature extraction from VGG19 for neural style transfer.
+    """
+    Manages feature extraction from VGG19 for neural style transfer.
 
     This model slices a pretrained VGG19 network into sequential blocks
     based on specified layer indices for extracting different levels of
@@ -156,12 +162,13 @@ class StyleContentModel(nn.Module):
             style image.
         content_targets (list[Tensor]): Precomputed activations from
             content image.
+
     """
 
     def __init__(
         self,
         style_layers: list[int],
-        content_layers: list[int]
+        content_layers: list[int],
     ) -> None:
         super().__init__()
         vgg = initialize_vgg()
@@ -169,12 +176,12 @@ class StyleContentModel(nn.Module):
             create_feature_blocks(vgg, style_layers, content_layers)
 
         # Targets will be set later
-        self.style_targets = None
-        self.content_targets = None
+        self.style_targets: list[torch.Tensor] | None = None
+        self.content_targets: list[torch.Tensor] | None = None
 
     def _extract_style_features(
         self,
-        style_img: torch.Tensor
+        style_img: torch.Tensor,
     ) -> list[torch.Tensor]:
         """Extract style features (Gram matrices) from the style image."""
         style_targets = []
@@ -187,7 +194,7 @@ class StyleContentModel(nn.Module):
 
     def _extract_content_features(
         self,
-        content_img: torch.Tensor
+        content_img: torch.Tensor,
     ) -> list[torch.Tensor]:
         """Extract content features from the content image."""
         content_targets = []
@@ -201,14 +208,15 @@ class StyleContentModel(nn.Module):
     def set_targets(
         self,
         style_img: torch.Tensor,
-        content_img: torch.Tensor
+        content_img: torch.Tensor,
     ) -> None:
-        """Extracts and stores feature representations from style and
-        content images.
+        """
+        Set target features for style and content loss computations.
 
-        Must be called before the forward pass to establish target
-        features for both style (Gram matrices) and content features
-        (direct activations) that will be used during optimization.
+        Extracts Gram matrices from the style image and activations from
+        the content image. This method must be called before the forward
+        pass to initialize target feature representations used during
+        optimization.
         """
         self.style_targets = self._extract_style_features(style_img)
         self.content_targets = self._extract_content_features(content_img)
@@ -216,64 +224,81 @@ class StyleContentModel(nn.Module):
     def _compute_style_losses(
         self,
         features: torch.Tensor,
-        block_idx: int
-    ) -> Optional[torch.Tensor]:
-        """Computes MSE loss between Gram matrices of current features
-        and style targets.
+        block_idx: int,
+    ) -> torch.Tensor | None:
+        """
+        Compute style loss for a specific block using Gram matrices.
 
-        Only processes blocks that have been designated as style layers
-        during initialization.  For non-style blocks, returns None to
-        avoid unnecessary computation.
+        Applies MSE loss between the Gram matrix of the current features
+        and the corresponding style target. Only active on blocks
+        designated as style layers; returns None for all others to avoid
+        unnecessary computation.
 
         Args:
-            features: The feature tensor from the current block
-            block_idx: The index of the current block
+            features: Feature tensor from the current block.
+            block_idx: Index of the current block in the VGG hierarchy.
 
         Returns:
-            Optional[torch.Tensor]: Style loss tensor if this is a style
-            block, None otherwise
+            A scalar tensor representing style loss, or None if the
+            block is not part of the style layers.
+
         """
+        if self.style_targets is None:
+            msg = "style_targets must be set before computing losses."
+            raise RuntimeError(msg)
+
         if block_idx not in self.style_ids:
             return None
-        G = gram_matrix(features)  # pylint: disable=invalid-name
+        gram = gram_matrix(features)
         target = self.style_targets[self.style_ids.index(block_idx)]
-        return F.mse_loss(G, target)
+        return mse_loss(gram, target)
 
     def _compute_content_losses(
         self,
         features: torch.Tensor,
-        block_idx: int
-    ) -> Optional[torch.Tensor]:
-        """Computes MSE loss between current features and content
-        targets.
+        block_idx: int,
+    ) -> torch.Tensor | None:
+        """
+        Compute content loss for a specific block using MSE.
 
-        Only processes blocks that have been designated as content
-        layers during initialization.  This measures how well content
-        features are preserved in the generated image.
+        Compares current activations to stored content targets for blocks
+        marked as content layers. This measures how well the generated
+        image preserves content structure. Returns None for non-content
+        blocks to skip unnecessary computation.
 
         Args:
-            features: The feature tensor from the current block
-            block_idx: The index of the current block
+            features: Feature tensor from the current block.
+            block_idx: Index of the current block in the VGG hierarchy.
 
         Returns:
-            Optional[torch.Tensor]: Content loss tensor if this is a
-            content block, None otherwise
+            A scalar tensor representing content loss, or None if the block
+            is not part of the content layers.
+
         """
+        if self.content_targets is None:
+            msg = "content_targets must be set before computing losses."
+            raise RuntimeError(msg)
+
         if block_idx not in self.content_ids:
             return None
         target = self.content_targets[self.content_ids.index(block_idx)]
-        return F.mse_loss(features, target)
+        return mse_loss(features, target)
 
-    def forward(self, x: torch.Tensor) -> Tuple[TensorList, TensorList]:
-        """Forward pass through the model to compute style and content
-        losses.
+    def forward(self, x: torch.Tensor) -> tuple[TensorList, TensorList]:
+        """
+        Compute style and content losses for the input image.
+
+        Passes the input through the model and collects loss values from
+        designated style and content layers. Assumes target features have
+        already been set via `set_targets()`.
 
         Args:
-            x: Input image tensor
+            x: Input image tensor of shape [1, C, H, W].
 
         Returns:
-            Tuple[TensorList, TensorList]: Lists of style and content
-                losses
+            A tuple of two lists: style losses and content losses, each
+            containing scalar tensors.
+
         """
         style_losses, content_losses = [], []
         for j, block in enumerate(self.vgg_blocks):
@@ -293,16 +318,17 @@ class StyleContentModel(nn.Module):
         return style_losses, content_losses
 
 
-def prepare_model_and_input(
+def prepare_model_and_input(  # noqa: PLR0913
     content_img: torch.Tensor,
     style_img: torch.Tensor,
     device: torch.device,
     init_method: InitMethod = "random",
     learning_rate: float = 1.0,
     style_layers: list[int] = DEFAULT_STYLE_LAYERS,
-    content_layers: list[int] = DEFAULT_CONTENT_LAYERS
-) -> Tuple[nn.Module, torch.Tensor, torch.optim.Optimizer]:
-    """Initialize the model and input image for style transfer.
+    content_layers: list[int] = DEFAULT_CONTENT_LAYERS,
+) -> tuple[nn.Module, torch.Tensor, torch.optim.Optimizer]:
+    """
+    Initialize the model and input image for style transfer.
 
     Args:
         content_img: Content image tensor
@@ -315,6 +341,7 @@ def prepare_model_and_input(
 
     Returns:
         Tuple of (model, input_img, optimizer)
+
     """
     model = StyleContentModel(style_layers, content_layers).to(device)
     model.set_targets(style_img, content_img)

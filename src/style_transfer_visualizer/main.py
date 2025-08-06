@@ -1,79 +1,97 @@
 """Top-level orchestration for style transfer logic."""
 
 from pathlib import Path
-from typing import cast, Optional
+from typing import cast
 
 import torch
 
-from style_transfer_visualizer.config_defaults import (
-    DEFAULT_OUTPUT_DIR, DEFAULT_STEPS, DEFAULT_SAVE_EVERY,
-    DEFAULT_STYLE_WEIGHT, DEFAULT_CONTENT_WEIGHT, DEFAULT_LEARNING_RATE,
-    DEFAULT_INIT_METHOD, DEFAULT_SEED, DEFAULT_NORMALIZE, DEFAULT_FPS,
-    DEFAULT_VIDEO_QUALITY, DEFAULT_CREATE_VIDEO, DEFAULT_FINAL_ONLY,
-    DEFAULT_DEVICE, DEFAULT_CONTENT_LAYERS, DEFAULT_STYLE_LAYERS,
-    DEFAULT_LOG_EVERY
-)
 import style_transfer_visualizer.core_model as stv_core_model
 import style_transfer_visualizer.image_io as stv_image_io
 import style_transfer_visualizer.optimization as stv_optimizer
 import style_transfer_visualizer.utils as stv_utils
 import style_transfer_visualizer.video as stv_video
-from style_transfer_visualizer.types import InitMethod
+from style_transfer_visualizer.config_defaults import (
+    DEFAULT_CONTENT_LAYERS,
+    DEFAULT_CONTENT_WEIGHT,
+    DEFAULT_CREATE_VIDEO,
+    DEFAULT_DEVICE,
+    DEFAULT_FINAL_ONLY,
+    DEFAULT_FPS,
+    DEFAULT_INIT_METHOD,
+    DEFAULT_LEARNING_RATE,
+    DEFAULT_LOG_EVERY,
+    DEFAULT_NORMALIZE,
+    DEFAULT_OUTPUT_DIR,
+    DEFAULT_SAVE_EVERY,
+    DEFAULT_SEED,
+    DEFAULT_STEPS,
+    DEFAULT_STYLE_LAYERS,
+    DEFAULT_STYLE_WEIGHT,
+    DEFAULT_VIDEO_QUALITY,
+)
+from style_transfer_visualizer.type_defs import InitMethod
 
 
-def style_transfer(
+def style_transfer(  # noqa: PLR0913
     content_path: str,
     style_path: str,
-    output_dir: str = DEFAULT_OUTPUT_DIR,
+    *,
     steps: int = DEFAULT_STEPS,
-    save_every: int = DEFAULT_SAVE_EVERY,
     style_weight: float = DEFAULT_STYLE_WEIGHT,
     content_weight: float = DEFAULT_CONTENT_WEIGHT,
     learning_rate: float = DEFAULT_LEARNING_RATE,
     style_layers: list[int] = DEFAULT_STYLE_LAYERS,
     content_layers: list[int] = DEFAULT_CONTENT_LAYERS,
-    fps: int = DEFAULT_FPS,
     device_name: str = DEFAULT_DEVICE,
     init_method: str = DEFAULT_INIT_METHOD,
     normalize: bool = DEFAULT_NORMALIZE,
-    create_video: bool = DEFAULT_CREATE_VIDEO,
-    final_only: bool = DEFAULT_FINAL_ONLY,
-    video_quality: int = DEFAULT_VIDEO_QUALITY,
     seed: int = DEFAULT_SEED,
+    output_dir: str = DEFAULT_OUTPUT_DIR,
+    final_only: bool = DEFAULT_FINAL_ONLY,
     plot_losses: bool = True,
-    log_loss_path: Optional[str] = None,
-    log_every: int = DEFAULT_LOG_EVERY
+    log_loss_path: str | None = None,
+    log_every: int = DEFAULT_LOG_EVERY,
+    create_video: bool = DEFAULT_CREATE_VIDEO,
+    save_every: int = DEFAULT_SAVE_EVERY,
+    fps: int = DEFAULT_FPS,
+    video_quality: int = DEFAULT_VIDEO_QUALITY,
 ) -> torch.Tensor:
     """
-    Orchestrates the full style transfer pipeline.
+    Run full neural style transfer pipeline on a pair of input images.
+
+    Combines image loading, model setup, optimization, and optional
+    video generation to produce a stylized version of the content image.
 
     Args:
-        content_path: Path to the content image
-        style_path: Path to the style image
-        output_dir: Directory to save outputs
-        steps: Number of optimization steps
-        save_every: Save frame every N steps
-        style_weight: Weight for style loss
-        content_weight: Weight for content loss
-        learning_rate: Learning rate for optimizer
-        fps: Frames per second for timelapse video
-        device_name: Device to run on ("cuda" or "cpu")
-        init_method: Method to initialize the input image
-        normalize: Whether to use ImageNet normalization
-        create_video: Whether to create a timelapse video
-        final_only: Whether to only save the final image
-        video_quality: Quality setting for output video (1-10)
-        seed: Random seed for reproducibility
-        plot_losses: Whether to plot losses via matplotlib
-        log_loss_path: Path to log loss
-        log_every: Log every N steps
+        content_path: Path to the content image.
+        style_path: Path to the style image.
+        steps: Number of optimization steps.
+        style_weight: Weight applied to the style loss.
+        content_weight: Weight applied to the content loss.
+        learning_rate: Learning rate used by the optimizer.
+        style_layers: VGG layer indices to use for style features.
+        content_layers: VGG layer indices to use for content features.
+        device_name: Device to run on ("cuda" or "cpu").
+        init_method: Initialization method for the input image.
+        normalize: Whether to apply ImageNet normalization.
+        seed: Seed for random number generation.
+        output_dir: Directory to save output images and video.
+        final_only: If True, only save the final image.
+        plot_losses: If True, plot loss curves with matplotlib.
+        log_loss_path: If set, path to write a CSV loss log.
+        log_every: Log loss every N steps.
+        create_video: If True, generate timelapse video of the transfer.
+        save_every: Save a frame every N steps during optimization.
+        fps: Frames per second for the timelapse video.
+        video_quality: Quality of the output video (1-10 scale).
 
     Returns:
-        The final stylized image tensor
+        Final stylized image as a torch tensor.
 
     Note:
         Input images must be pre-sized by the user. Minimum size: 64px;
-        processing may be slow above 3000px.
+        performance may degrade above ~3000px resolution.
+
     """
     # Validate inputs
     stv_utils.validate_input_paths(content_path, style_path)
@@ -96,8 +114,8 @@ def style_transfer(
 
     # Prepare model and optimizer
     model, input_img, optimizer = stv_core_model.prepare_model_and_input(
-        content_img, style_img, device, cast(InitMethod, init_method),
-        learning_rate, style_layers, content_layers
+        content_img, style_img, device, cast(InitMethod, init_method), # noqa: TC006
+        learning_rate, style_layers, content_layers,
     )
 
     # Prepare output paths
@@ -108,14 +126,15 @@ def style_transfer(
 
     # Initialize video writer (if needed)
     video_writer = stv_video.setup_video_writer(
-        output_path, video_name, fps, video_quality, create_video
+        output_path, video_name, fps, video_quality, create_video=create_video,
     )
 
     # Run optimization
     input_img, loss_metrics, elapsed = stv_optimizer.run_optimization_loop(
         model, input_img, optimizer,
         steps, save_every, style_weight,
-        content_weight, normalize, video_writer, log_loss_path, log_every
+        content_weight, normalize=normalize, video_writer=video_writer,
+        log_loss_path=log_loss_path, log_every=log_every,
     )
 
     # Clean up and save outputs
@@ -132,7 +151,7 @@ def style_transfer(
         video_name=video_name,
         normalize=normalize,
         video_created=create_video,
-        plot_losses=plot_losses
+        plot_losses=plot_losses,
     )
 
     return input_img.detach().clamp(0, 1)

@@ -12,27 +12,33 @@ from pydantic import BaseModel, Field
 
 # Import internal constants for shared use
 from style_transfer_visualizer.config_defaults import (
-    DEFAULT_STEPS,
-    DEFAULT_STYLE_WEIGHT,
+    DEFAULT_CONTENT_LAYERS,
     DEFAULT_CONTENT_WEIGHT,
-    DEFAULT_LEARNING_RATE,
-    DEFAULT_INIT_METHOD,
-    DEFAULT_SEED,
-    DEFAULT_NORMALIZE,
-    DEFAULT_SAVE_EVERY,
-    DEFAULT_FPS,
-    DEFAULT_VIDEO_QUALITY,
     DEFAULT_CREATE_VIDEO,
-    DEFAULT_FINAL_ONLY,
     DEFAULT_DEVICE,
-    DEFAULT_OUTPUT_DIR,
+    DEFAULT_FINAL_ONLY,
+    DEFAULT_FPS,
+    DEFAULT_INIT_METHOD,
+    DEFAULT_LEARNING_RATE,
     DEFAULT_LOG_EVERY,
+    DEFAULT_NORMALIZE,
+    DEFAULT_OUTPUT_DIR,
+    DEFAULT_SAVE_EVERY,
+    DEFAULT_SEED,
+    DEFAULT_STEPS,
     DEFAULT_STYLE_LAYERS,
-    DEFAULT_CONTENT_LAYERS
+    DEFAULT_STYLE_WEIGHT,
+    DEFAULT_VIDEO_QUALITY,
+)
+from style_transfer_visualizer.constants import (
+    VIDEO_QUALITY_MAX,
+    VIDEO_QUALITY_MIN,
 )
 
 
 class OptimizationConfig(BaseModel):
+    """Control optimization settings for style transfer."""
+
     steps: int = Field(DEFAULT_STEPS, ge=1)
     style_w: float = Field(DEFAULT_STYLE_WEIGHT, ge=0)
     content_w: float = Field(DEFAULT_CONTENT_WEIGHT, ge=0)
@@ -46,18 +52,28 @@ class OptimizationConfig(BaseModel):
         default_factory=lambda: DEFAULT_CONTENT_LAYERS)
 
 class VideoConfig(BaseModel):
+    """Control settings for video output."""
+
     save_every: int = Field(DEFAULT_SAVE_EVERY, ge=1)
     fps: int = Field(DEFAULT_FPS, ge=1, le=60)
-    quality: int = Field(DEFAULT_VIDEO_QUALITY, ge=1, le=10)
+    quality: int = Field(
+        DEFAULT_VIDEO_QUALITY,
+        ge=VIDEO_QUALITY_MIN,
+        le=VIDEO_QUALITY_MAX,
+    )
     create_video: bool = DEFAULT_CREATE_VIDEO
     final_only: bool = DEFAULT_FINAL_ONLY
 
 
 class HardwareConfig(BaseModel):
+    """Select hardware acceleration device."""
+
     device: str = Field(DEFAULT_DEVICE)
 
 
 class OutputConfig(BaseModel):
+    """Configure output directory and logging interval."""
+
     output: str = Field(DEFAULT_OUTPUT_DIR)
     log_every: int = Field(DEFAULT_LOG_EVERY, ge=1)
 
@@ -69,11 +85,15 @@ class StyleTransferConfig(BaseModel):
     Mirrors the structure of config.toml, grouping related parameters
     under logical categories.
     """
-    output: OutputConfig = Field(default_factory=OutputConfig)
+
+    # NOTE: These `default_factory` assignments raise false-positive type
+    #       errors in Pyright.  We've added targeted ignores for now and will
+    #       remove them if and when we drop Pydantic.
+    output: OutputConfig = Field(default_factory=OutputConfig) # pyright: ignore[reportArgumentType]
     optimization: OptimizationConfig = Field(default_factory
-                                             =OptimizationConfig)
-    video: VideoConfig = Field(default_factory=VideoConfig)
-    hardware: HardwareConfig = Field(default_factory=HardwareConfig)
+                                             =OptimizationConfig) # pyright: ignore[reportArgumentType]
+    video: VideoConfig = Field(default_factory=VideoConfig) # pyright: ignore[reportArgumentType]
+    hardware: HardwareConfig = Field(default_factory=HardwareConfig) # pyright: ignore[reportArgumentType]
 
 
 class ConfigLoader:
@@ -85,9 +105,16 @@ class ConfigLoader:
 
     @staticmethod
     def load(path: str) -> StyleTransferConfig:
+        """
+        Load a style transfer configuration from a TOML file.
+
+        Returns a validated StyleTransferConfig instance based on the file
+        contents.
+        """
         config_path = Path(path)
         if not config_path.is_file():
-            raise FileNotFoundError(f"Config file not found: {path}")
+            msg = f"Config file not found: {path}"
+            raise FileNotFoundError(msg)
 
         with config_path.open("r", encoding="utf-8") as f:
             doc = tomlkit.load(f)

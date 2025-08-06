@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "style-transfer-visualizer"
+version = "1.1.0.dev1"
+description = "A command-line tool for neural style transfer with PyTorch"
+authors = [{ name = "Ben Goldsmith" }]
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+dependencies = [
+    "torch==2.7.0",
+    "torchvision==0.22.0",
+    "tqdm==4.67.1",
+    "imageio==2.37.0",
+    "imageio-ffmpeg==0.6.0",
+    "matplotlib==3.10.3",
+    "pillow~=11.0.0",
+    "numpy~=2.1.2",
+    "tomlkit~=0.13.2",
+    "pydantic~=2.11.5"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest~=8.3.5",
+    "pytest-cov~=4.1.0",
+    "pytest-mock~=3.14.0",
+    "hypothesis~=6.131.19",
+    "pyright~=1.1.403",
+    "ruff~=0.12.4",
+    "pre-commit~=4.2.0"
+]
+
+[project.scripts]
+style-visualizer = "style_transfer_visualizer.cli:main"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 79
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["D107", "D203", "D212"]
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/**/*.py" = ["S101"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["style_transfer_visualizer"]
+combine-as-imports = true
+
+[tool.ruff.format]
+docstring-code-line-length = 72
+quote-style = "double"
+
+[tool.pyright]
+include = ["src"]
+exclude = ["**/__pycache__"]
+reportMissingImports = true
+reportMissingTypeStubs = false
+pythonVersion = "3.12"
+pythonPlatform = "All"
+#typeCheckingMode = "strict"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = "src"
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --cov=. --cov-report=term-missing --cov-report=html --cov-report=xml --cov-branch"
+markers = [
+    '''slow: marks tests as slow (deselect with '-m "not slow"')''',
+    '''integration: marks tests that require external resources''',
+    '''visual: marks tests that produce visual outputs'''
+]
+log_cli = true
+log_cli_level = "INFO"

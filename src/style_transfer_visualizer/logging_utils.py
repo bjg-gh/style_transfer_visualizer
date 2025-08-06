@@ -1,39 +1,37 @@
 """
-logging_utils.py
+Centralized logging utilities for the style transfer application.
 
-Shared application-wide logger instance and setup function.
-
-Usage:
-    from style_transfer_visualizer.logging_utils import logger
-
-Why this exists:
-    Centralizing logger creation in its own isolated module prevents
-    circular imports.
-
-All log messages throughout the application should use this logger for
-consistency in formatting, level control, and future extensibility
-(e.g., file logging or verbosity flags).
+Defines a shared logger instance and setup function to ensure consistent
+logging configuration across the codebase. Centralization also avoids
+circular imports and simplifies future extensions like file logging
+or verbosity control.
 """
+
 import logging
 
 
 def setup_logger(
         name: str = __name__,
         level: int = logging.INFO,
-        formatter: logging.Formatter = None,
-        handler: logging.Handler = None
+        formatter: logging.Formatter | None = None,
+        handler: logging.Handler | None = None,
 ) -> logging.Logger:
-    """Configure and return a module-level logger with optional custom
-    settings.
+    """
+    Configure a logger with optional custom formatting and handler.
+
+    Creates a module-level logger with sensible defaults for level and
+    formatting. Custom handlers and formatters can be supplied if
+    needed.
 
     Args:
-        name: Name of the module
-        level: Level of the logger
-        formatter: Format for log messages
-        handler: Custom handler for log messages
+        name: Logger name, typically set to __name__.
+        level: Logging level (e.g., logging.INFO, logging.DEBUG).
+        formatter: Optional custom formatter.
+        handler: Optional custom handler.
 
     Returns:
-        Logger: A module-level logger with optional custom settings.
+        A configured logger instance.
+
     """
     logger_instance = logging.getLogger(name)
     logger_instance.setLevel(level)

@@ -1,4 +1,5 @@
-"""Tests for the updated CLI parser and execution logic.
+"""
+Tests for the updated CLI parser and execution logic.
 
 These tests verify correct CLI parsing, config fallback behavior,
 flag handling, and main entry point integration.
@@ -12,7 +13,9 @@ Simulates CLI usage with monkeypatching and verifies end-to-end flow.
 """
 
 import argparse
+import subprocess
 import sys
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -20,19 +23,29 @@ import pytest
 import torch
 from _pytest.logging import LogCaptureFixture
 from _pytest.monkeypatch import MonkeyPatch
+from PIL import Image
 
 import style_transfer_visualizer.cli as stv_cli
 import style_transfer_visualizer.main as stv_main
 from style_transfer_visualizer.config_defaults import (
-    DEFAULT_OUTPUT_DIR, DEFAULT_STEPS, DEFAULT_SAVE_EVERY,
-    DEFAULT_STYLE_WEIGHT, DEFAULT_CONTENT_WEIGHT, DEFAULT_LEARNING_RATE,
-    DEFAULT_FPS, DEFAULT_VIDEO_QUALITY, DEFAULT_INIT_METHOD,
-    DEFAULT_DEVICE, DEFAULT_SEED
+    DEFAULT_CONTENT_WEIGHT,
+    DEFAULT_DEVICE,
+    DEFAULT_FPS,
+    DEFAULT_INIT_METHOD,
+    DEFAULT_LEARNING_RATE,
+    DEFAULT_OUTPUT_DIR,
+    DEFAULT_SAVE_EVERY,
+    DEFAULT_SEED,
+    DEFAULT_STEPS,
+    DEFAULT_STYLE_WEIGHT,
+    DEFAULT_VIDEO_QUALITY,
 )
 
 
 class TestCLIArgumentParsing:
-    def test_flag_parsing(self):
+    """Unit tests for CLI flag parsing and layer argument handling."""
+
+    def test_flag_parsing(self) -> None:
         """Test that boolean flags are parsed correctly."""
         parser = stv_cli.build_arg_parser()
         args = parser.parse_args([
@@ -41,7 +54,7 @@ class TestCLIArgumentParsing:
             "--no-normalize",
             "--no-video",
             "--final-only",
-            "--no-plot"
+            "--no-plot",
         ])
 
         assert args.no_normalize is True
@@ -49,16 +62,16 @@ class TestCLIArgumentParsing:
         assert args.final_only is True
         assert args.no_plot is True
 
-    def test_required_args_missing(self, monkeypatch: Any):
+    def test_required_args_missing(self, monkeypatch: MonkeyPatch) -> None:
         """Test that missing required arguments triggers SystemExit."""
         monkeypatch.setattr(sys, "argv", ["prog"])
         with pytest.raises(SystemExit):
             stv_cli.main()
 
     @pytest.mark.parametrize(
-        "style_str, content_str, expected_style, expected_content", [
+        ("style_str", "content_str", "expected_style", "expected_content"), [
             ("0,1,2", "3", [0, 1, 2], [3]),
-            ("5", "10,15", [5], [10, 15])
+            ("5", "10,15", [5], [10, 15]),
         ])
     def test_layer_args_are_parsed(
         self,
@@ -66,7 +79,7 @@ class TestCLIArgumentParsing:
         style_str: str,
         content_str: str,
         expected_style: list[int],
-        expected_content: list[int]
+        expected_content: list[int],
     ) -> None:
         """Verify CLI layer flags are parsed and forwarded correctly."""
         args = argparse.Namespace(
@@ -89,7 +102,7 @@ class TestCLIArgumentParsing:
             seed=42,
             device="cpu",
             style_layers=style_str,
-            content_layers=content_str
+            content_layers=content_str,
         )
 
         captured: dict[str, Any] = {}
@@ -102,36 +115,42 @@ class TestCLIArgumentParsing:
         assert captured["style_layers"] == expected_style
         assert captured["content_layers"] == expected_content
 
-    def test_log_loss_and_log_every_flags(self):
+    def test_log_loss_and_log_every_flags(self) -> None:
         """Test that --log-loss and --log-every are parsed correctly."""
         parser = stv_cli.build_arg_parser()
         args = parser.parse_args([
             "--content", "cat.jpg",
             "--style", "mosaic.jpg",
             "--log-loss", "losses.csv",
-            "--log-every", "25"
+            "--log-every", "25",
         ])
 
         assert args.log_loss == "losses.csv"
-        assert args.log_every == 25
+        assert args.log_every == 25  # noqa: PLR2004
 
 
 class TestCLIRunFromArgs:
-    def test_config_only_mode(self, monkeypatch: Any, tmp_path: Path):
+    """Tests config loading, CLI overrides, and loss plotting logic."""
+
+    def test_config_only_mode(
+        self,
+        monkeypatch: MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
         """Test --validate-config-only short-circuits the run."""
         config_path = tmp_path / "config.toml"
         config_path.write_text("[output]\noutput = 'abc'")
 
         args = argparse.Namespace(
             config=str(config_path),
-            validate_config_only=True
+            validate_config_only=True,
         )
 
         exit_called = {}
 
-        def fake_exit(code=0):
+        def fake_exit(code: int=0) -> None:
             exit_called["code"] = code
-            raise SystemExit()
+            raise SystemExit
 
         monkeypatch.setattr(stv_cli.sys, "exit", fake_exit)
         monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
@@ -141,7 +160,7 @@ class TestCLIRunFromArgs:
 
         assert exit_called["code"] == 0
 
-    def test_args_override_config(self, monkeypatch: Any):
+    def test_args_override_config(self, monkeypatch: MonkeyPatch) -> None:
         """Test CLI arguments override config values."""
         args = argparse.Namespace(
             content="cat.jpg",
@@ -161,7 +180,7 @@ class TestCLIRunFromArgs:
             final_only=True,
             quality=7,
             seed=123,
-            device="cpu"
+            device="cpu",
         )
 
         captured = {}
@@ -169,13 +188,12 @@ class TestCLIRunFromArgs:
             lambda **kwargs: captured.update(kwargs) or torch.rand(1))
         monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
 
-        result = stv_cli.run_from_args(args)
-        assert isinstance(result, torch.Tensor)
-        assert captured["steps"] == 123
+        stv_cli.run_from_args(args)
+        assert captured["steps"] == 123  # noqa: PLR2004
         assert captured["normalize"] is True
         assert captured["create_video"] is True
 
-    def test_flags_flip_behavior(self, monkeypatch: Any):
+    def test_flags_flip_behavior(self, monkeypatch: MonkeyPatch) -> None:
         """Test that --no-* flags flip behavior correctly."""
         args = argparse.Namespace(
             content="cat.jpg",
@@ -195,7 +213,7 @@ class TestCLIRunFromArgs:
             final_only=False,
             quality=DEFAULT_VIDEO_QUALITY,
             seed=DEFAULT_SEED,
-            device=DEFAULT_DEVICE
+            device=DEFAULT_DEVICE,
         )
 
         captured = {}
@@ -209,9 +227,9 @@ class TestCLIRunFromArgs:
 
 
     def test_run_from_args_config_not_validating(
-        self, monkeypatch: Any, tmp_path: Path
-    ):
-        """Test config loads but validate_config_only is False, so get() is used."""
+        self, monkeypatch: MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        """Test config loads but validate_config_only is False."""
         config_path = tmp_path / "config.toml"
         config_path.write_text("""
 [output]
@@ -238,7 +256,7 @@ device = "cuda"
             content="cat.jpg",
             style="s.jpg",
             config=str(config_path),
-            validate_config_only=False
+            validate_config_only=False,
         )
 
         captured = {}
@@ -246,18 +264,17 @@ device = "cuda"
         monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
         monkeypatch.setattr(
             stv_main, "style_transfer",
-            lambda **kwargs: captured.update(kwargs) or torch.rand(1)
+            lambda **kwargs: captured.update(kwargs) or torch.rand(1),
         )
 
-        result = stv_cli.run_from_args(args)
-        assert isinstance(result, torch.Tensor)
+        stv_cli.run_from_args(args)
         assert captured["output_dir"] == "config_out"
-        assert captured["steps"] == 123
+        assert captured["steps"] == 123  # noqa: PLR2004
 
     def test_plot_disabled_when_log_loss_set(
-        self, monkeypatch: Any, caplog
-    ):
-        """Test plot_losses is disabled and warning logged when log_loss is active."""
+        self, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture,
+    ) -> None:
+        """Test that log_loss disables plot_losses and logs a warning."""
         args = argparse.Namespace(
             content="cat.jpg",
             style="wave.jpg",
@@ -273,7 +290,7 @@ device = "cuda"
             init_method=DEFAULT_INIT_METHOD,
             no_normalize=False,
             no_video=False,
-            no_plot=False,  # This is NOT set, but --log-loss should disable plotting
+            no_plot=False,  # NOT set, but --log-loss should disable plotting
             final_only=False,
             quality=DEFAULT_VIDEO_QUALITY,
             seed=DEFAULT_SEED,
@@ -292,11 +309,19 @@ device = "cuda"
         stv_cli.run_from_args(args)
 
         assert captured["plot_losses"] is False
-        assert "Loss plotting is disabled because CSV logging is enabled" in caplog.text
+        assert (
+            "Loss plotting is disabled because CSV logging is enabled"
+            in caplog.text
+        )
 
 
 class TestLogParameters:
-    def test_log_parameters_logs_config(self, caplog):
+    """Tests parameter logging output for CLI execution."""
+
+    def test_log_parameters_logs_config(
+        self,
+        caplog: LogCaptureFixture,
+    ) -> None:
         """Test config path is logged if provided."""
         args = argparse.Namespace(
             content="cat.jpg",
@@ -318,7 +343,7 @@ class TestLogParameters:
             quality=8,
             seed=0,
             device="cpu",
-            plot_losses=True
+            plot_losses=True,
         )
 
         caplog.set_level("INFO")
@@ -343,12 +368,17 @@ class TestLogParameters:
             "video_quality": args.quality,
             "seed": args.seed,
             "device_name": args.device,
-            "plot_losses": args.plot_losses
+            "plot_losses": args.plot_losses,
         }, args)
 
-        assert any("Loaded config from: abc.toml" in m for m in caplog.messages)
+        assert any(
+            "Loaded config from: abc.toml" in m for m in caplog.messages
+        )
 
-    def test_log_parameters_without_config(self, caplog):
+    def test_log_parameters_without_config(
+        self,
+        caplog: LogCaptureFixture,
+    ) -> None:
         """Test log_parameters skips config logging if not provided."""
         args = argparse.Namespace(
             content="cat.jpg",
@@ -369,7 +399,7 @@ class TestLogParameters:
             quality=8,
             seed=0,
             device="cpu",
-            plot_losses=True
+            plot_losses=True,
         )
 
         caplog.set_level("INFO")
@@ -394,14 +424,14 @@ class TestLogParameters:
             "video_quality": args.quality,
             "seed": args.seed,
             "device_name": args.device,
-            "plot_losses": args.plot_losses
+            "plot_losses": args.plot_losses,
         }, args)
 
         assert not any("Loaded config from:" in m for m in caplog.messages)
 
     def test_log_parameters_includes_layer_config(
         self,
-        caplog: LogCaptureFixture
+        caplog: LogCaptureFixture,
     ) -> None:
         """Ensure log_parameters prints layer config to logs."""
         args = argparse.Namespace(
@@ -424,7 +454,7 @@ class TestLogParameters:
             quality=8,
             seed=0,
             device="cpu",
-            plot_losses=True
+            plot_losses=True,
         )
         params = {
             "content_path": args.content,
@@ -445,14 +475,14 @@ class TestLogParameters:
             "device_name": args.device,
             "style_layers": [0, 5, 10],
             "content_layers": [21],
-            "plot_losses": args.plot_losses
+            "plot_losses": args.plot_losses,
         }
         caplog.set_level("INFO")
         stv_cli.log_parameters(params, args)
         assert "Style Layers" in caplog.text
         assert "Content Layers" in caplog.text
 
-    def test_no_plot_flag(self, monkeypatch: Any):
+    def test_no_plot_flag(self, monkeypatch: MonkeyPatch) -> None:
         """Test that --no-plot disables plotting."""
         args = argparse.Namespace(
             content="cat.jpg",
@@ -486,10 +516,12 @@ class TestLogParameters:
 
 
 class TestCLIMainFlow:
-    def test_main_invokes_run(self, monkeypatch: Any):
+    """Container for top-level CLI flow entry point tests."""
+
+    def test_main_invokes_run(self, monkeypatch: MonkeyPatch) -> None:
         """Test that main() runs the CLI flow."""
         monkeypatch.setattr(sys, "argv", [
-            "prog", "--content", "c.jpg", "--style", "s.jpg"
+            "prog", "--content", "c.jpg", "--style", "s.jpg",
         ])
 
         called = {}
@@ -499,35 +531,85 @@ class TestCLIMainFlow:
         stv_cli.main()
         assert called.get("ran") is True
 
-    def test_run_from_args_validate_config_only(self, monkeypatch, tmp_path):
+    def test_run_from_args_validate_config_only(
+        self,
+        monkeypatch: MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
         """
-        Strategy: Test --validate-config-only mode by providing only the
-         required CLI args.
+        Test --validate-config-only mode exits early after validation.
 
-        We isolate the validation branch by mocking sys.exit early.
-        Monkeypatch sys.exit to raise SystemExit so the code path halts
-        as expected.
+        This test mocks sys.exit to intercept the call and confirm that
+        the config file is validated without executing the pipeline.
         """
         config_path = tmp_path / "config.toml"
-        config_path.write_text("[output]\noutput = \"test_output\"")
+        config_path.write_text('[output]\noutput = "test_output"')
 
         args = argparse.Namespace(
             config=str(config_path),
-            validate_config_only=True
+            validate_config_only=True,
         )
 
         exit_called = {}
 
-        def fake_exit(code=0):
+        def fake_exit(code: int = 0) -> None:
             exit_called["code"] = code
-            raise SystemExit()
+            raise SystemExit
 
         monkeypatch.setattr(stv_cli.sys, "exit", fake_exit)
         monkeypatch.setattr(stv_cli, "log_parameters", lambda _: None)
 
-        try:
+        with suppress(SystemExit):
             stv_cli.run_from_args(args)
-        except SystemExit:
-            pass
 
         assert exit_called["code"] == 0
+
+
+@pytest.mark.integration
+def test_script_main_entry(tmp_path: Path) -> None:
+    """Integration test: execute script via subprocess with real images."""
+    script = (
+        Path(__file__).parent.parent
+        / "src"
+        / "style_transfer_visualizer"
+        / "cli.py"
+    ).resolve()
+    cwd = Path(__file__).parent.parent.resolve()
+
+    content = tmp_path / "content.jpg"
+    style = tmp_path / "style.jpg"
+
+    Image.new("RGB", (64, 64), color="blue").save(content)
+    Image.new("RGB", (64, 64), color="green").save(style)
+
+    result = subprocess.run(  # noqa: S603 - trusted subprocess call to Python CLI
+        [
+            sys.executable,
+            str(script),
+            "--content",
+            str(content),
+            "--style",
+            str(style),
+            "--final-only",
+            "--device",
+            "cpu",
+            "--steps",
+            "2",
+            "--save-every",
+            "3",
+            "--init-method",
+            "white",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+        timeout=180,
+        check=False,
+    )
+
+    assert result.returncode == 0, (
+        f"Script failed with return code {result.returncode}\n"
+        f"--- STDOUT ---\n{result.stdout}\n"
+        f"--- STDERR ---\n{result.stderr}\n"
+    )
+    assert "Style transfer completed" in result.stdout or result.stderr

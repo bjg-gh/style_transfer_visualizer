@@ -1,4 +1,5 @@
-"""Tests for utility functions in style_transfer_visualizer.
+"""
+Tests for utility functions in style_transfer_visualizer.
 
 This module verifies device selection, input validation,
 directory setup, loss plotting, and random seed behavior.
@@ -8,11 +9,10 @@ import os
 import random
 import shutil
 import sys
-from pathlib import Path as RealPath, Path
+from pathlib import Path as RealPath
 from types import ModuleType
-from typing import cast, Any
+from typing import cast
 
-import numpy as np
 import pytest
 import torch
 
@@ -20,6 +20,8 @@ from style_transfer_visualizer import utils as stv_utils
 
 
 class TestDeviceSetup:
+    """Tests device selection and fallback behavior."""
+
     def test_setup_device_cpu(self, caplog: pytest.LogCaptureFixture) -> None:
         """Test selecting CPU device and log message."""
         caplog.set_level(logging.INFO)
@@ -30,7 +32,7 @@ class TestDeviceSetup:
     def test_setup_device_cuda_available(
         self,
         caplog: pytest.LogCaptureFixture,
-        monkeypatch: pytest.MonkeyPatch
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Test selecting CUDA device if available."""
         caplog.set_level(logging.INFO)
@@ -42,7 +44,7 @@ class TestDeviceSetup:
     def test_setup_device_cuda_fallback(
         self,
         caplog: pytest.LogCaptureFixture,
-        monkeypatch: pytest.MonkeyPatch
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Test fallback to CPU when CUDA is unavailable."""
         caplog.set_level(logging.INFO)
@@ -58,15 +60,20 @@ class TestDeviceSetup:
 
 
 class TestInputValidation:
+    """Tests validation of input paths and video parameters."""
+
     def test_parameter_validation(self) -> None:
         """Test invalid video quality triggers ValueError."""
-        with pytest.raises(ValueError):
+        with pytest.raises(
+            ValueError,
+            match=r"(?i)video quality.*between 1 and 10",
+        ):
             stv_utils.validate_parameters(video_quality=-1)
 
     def test_input_path_validation(
         self,
         content_image: str,
-        style_image: str
+        style_image: str,
     ) -> None:
         """Test image path validation logic with good and bad paths."""
         stv_utils.validate_input_paths(content_image, style_image)
@@ -83,9 +90,11 @@ class TestInputValidation:
 
 
 class TestOutputDirectory:
+    """Tests output directory creation and fallback logic."""
+
     def test_setup_output_directory_creates_path(
         self,
-        tmp_path: RealPath
+        tmp_path: RealPath,
     ) -> None:
         """Test output directory creation."""
         output_dir = tmp_path / "new_output_dir"
@@ -93,30 +102,38 @@ class TestOutputDirectory:
         assert result.exists()
         assert result.is_dir()
 
-    def test_output_directory_fallback_on_failure(
-        self,
-        tmp_path: RealPath
-    ) -> None:
+    def test_output_directory_fallback_on_failure(self) -> None:
         """Test fallback path is used if directory creation fails."""
+
         class FailingPath(RealPath):
-            def mkdir(self, *args: Any, **kwargs: Any) -> None:
+            def mkdir(
+                self,
+                mode: int = 0o777,
+                parents: bool = False,  # noqa: FBT001, FBT002
+                exist_ok: bool = False,  # noqa: FBT001, FBT002
+            ) -> None:
                 if "restricted_output" in str(self):
-                    raise PermissionError("Mocked failure")
-                return super().mkdir(*args, **kwargs)
+                    msg = "Mocked failure"
+                    raise PermissionError(msg)
+                return super().mkdir(
+                    mode=mode, parents=parents, exist_ok=exist_ok,
+                )
 
         result = stv_utils.setup_output_directory(
             "restricted_output",
-            path_factory=FailingPath
+            path_factory=FailingPath,
         )
         assert result.name == "style_transfer_output"
         assert result.exists()
 
 
 class TestPlotLossCurves:
+    """Tests matplotlib loss plotting behavior and error handling."""
+
     def test_empty_metrics(
         self,
         output_dir: RealPath,
-        caplog: pytest.LogCaptureFixture
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Test warning if empty loss metrics are passed."""
         caplog.set_level("WARNING")
@@ -126,14 +143,14 @@ class TestPlotLossCurves:
     def test_empty_lists(
         self,
         output_dir: RealPath,
-        caplog: pytest.LogCaptureFixture
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Test warning if all loss metric lists are empty."""
         caplog.set_level("WARNING")
         metrics = {
             "style_loss": [],
             "content_loss": [],
-            "total_loss": []
+            "total_loss": [],
         }
         stv_utils.plot_loss_curves(metrics, output_dir)
         assert "Loss metrics dictionary is empty" in caplog.text
@@ -142,20 +159,27 @@ class TestPlotLossCurves:
         self,
         monkeypatch: pytest.MonkeyPatch,
         output_dir: RealPath,
-        caplog: pytest.LogCaptureFixture
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Test ImportError handling if matplotlib is unavailable."""
         caplog.set_level("WARNING")
 
         monkeypatch.setitem(sys.modules, "matplotlib",
-                            cast(ModuleType | None, None))
+                            cast("ModuleType | None", None))
         monkeypatch.setitem(sys.modules, "matplotlib.pyplot",
-                            cast(ModuleType | None, None))
+                            cast("ModuleType | None", None))
 
-        def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        def fake_import(
+            name: str,
+            globals: dict[str, object] | None = None,  # noqa: A002
+            locals: dict[str, object] | None = None,  # noqa: A002
+            fromlist: tuple[str, ...] = (),
+            level: int = 0,
+        ) -> ModuleType:
             if name == "matplotlib.pyplot":
-                raise ImportError("Simulated missing matplotlib")
-            return __import__(name, *args, **kwargs)
+                msg = "Simulated missing matplotlib"
+                raise ImportError(msg)
+            return __import__(name, globals, locals, fromlist, level)
 
         monkeypatch.setattr("builtins.__import__", fake_import)
 
@@ -167,7 +191,7 @@ class TestPlotLossCurves:
         metrics = {
             "style_loss": [1.0, 0.8, 0.5],
             "content_loss": [0.5, 0.4, 0.3],
-            "total_loss": [1.5, 1.2, 0.8]
+            "total_loss": [1.5, 1.2, 0.8],
         }
         stv_utils.plot_loss_curves(metrics, output_dir)
         plot_path = output_dir / "loss_plot.png"
@@ -176,13 +200,13 @@ class TestPlotLossCurves:
 
     def test_partial_empty_plot_loss_curves(
         self,
-        output_dir: RealPath
+        output_dir: RealPath,
     ) -> None:
         """Test plot when some loss metric lists are empty."""
         metrics = {
             "style_loss": [1.0, 2.0, 3.0],
             "content_loss": [],
-            "total_loss": []
+            "total_loss": [],
         }
         stv_utils.plot_loss_curves(metrics, output_dir)
         plot_path = output_dir / "loss_plot.png"
@@ -191,38 +215,39 @@ class TestPlotLossCurves:
 
 
 class TestSeedSetup:
+    """Tests random seed setup across libraries and devices."""
+
     def test_mocked_seed_calls(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test all seed functions are called with correct values."""
         called = {
             "torch_manual": False,
             "torch_cuda_manual": False,
             "random_seed": False,
-            "np_seed": False
         }
 
         monkeypatch.setattr(
-            torch, "manual_seed",
-            lambda x: called.__setitem__("torch_manual", True)
+            torch,
+            "manual_seed",
+            lambda _: called.__setitem__("torch_manual", True),  # noqa: FBT003
         )
         monkeypatch.setattr(
-            torch.cuda, "is_available",
-            lambda: True
+            torch.cuda,
+            "is_available",
+            lambda: True,
         )
         monkeypatch.setattr(
-            torch.cuda, "manual_seed_all",
-            lambda x: called.__setitem__("torch_cuda_manual", True)
+            torch.cuda,
+            "manual_seed_all",
+            lambda _: called.__setitem__("torch_cuda_manual", True),  # noqa: FBT003
         )
         monkeypatch.setattr(
-            random, "seed",
-            lambda x: called.__setitem__("random_seed", True)
-        )
-        monkeypatch.setattr(
-            np.random, "seed",
-            lambda x: called.__setitem__("np_seed", True)
+            random,
+            "seed",
+            lambda _: called.__setitem__("random_seed", True),  # noqa: FBT003
         )
 
         stv_utils.setup_random_seed(42)
-        assert all(called.values())
+        assert all(called.values()) is True
 
     def test_real_cuda_seed_execution(self) -> None:
         """Test real CUDA seeding (skipped in CI or if no GPU)."""
@@ -232,7 +257,7 @@ class TestSeedSetup:
 
     def test_setup_random_seed_no_cuda(
         self,
-        monkeypatch: pytest.MonkeyPatch
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Test seeding when CUDA is not available."""
         monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
@@ -240,13 +265,15 @@ class TestSeedSetup:
 
 
 class TestSaveOutputs:
-    def test_creates_final_image(self, output_dir: Path):
+    """Tests saving final images, loss plots, and video logging."""
+
+    def test_creates_final_image(self, output_dir: RealPath) -> None:
         """Test final image is saved correctly."""
         input_img = torch.rand(1, 3, 64, 64)
         loss_metrics = {
             "style_loss": [1.0],
             "content_loss": [0.5],
-            "total_loss": [1.5]
+            "total_loss": [1.5],
         }
 
         stv_utils.save_outputs(
@@ -259,20 +286,20 @@ class TestSaveOutputs:
             video_name="timelapse_dog_x_mosaic.mp4",
             normalize=False,
             video_created=True,
-            plot_losses=True
+            plot_losses=True,
         )
 
         final_path = output_dir / "stylized_dog_x_mosaic.png"
         assert final_path.exists()
         assert final_path.stat().st_size > 0
 
-    def test_save_outputs_no_plot(self, output_dir: Path):
+    def test_save_outputs_no_plot(self, output_dir: RealPath) -> None:
         """Test save_outputs skips plotting when plot_losses=False."""
         input_img = torch.rand(1, 3, 64, 64)
         loss_metrics = {
             "style_loss": [1.0],
             "content_loss": [0.5],
-            "total_loss": [1.5]
+            "total_loss": [1.5],
         }
         stv_utils.save_outputs(
             input_img = input_img,
@@ -284,22 +311,22 @@ class TestSaveOutputs:
             video_name = None,
             normalize = False,
             video_created = False,
-            plot_losses = False
+            plot_losses = False,
         )
         final_path = output_dir / "stylized_cat_x_wave.png"
         assert final_path.exists()
 
     def test_logs_video_path(
         self,
-        output_dir: Path,
-        caplog: pytest.LogCaptureFixture
+        output_dir: RealPath,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Test video path logging message is recorded."""
         input_img = torch.rand(1, 3, 64, 64)
         loss_metrics = {
             "style_loss": [1.0],
             "content_loss": [0.5],
-            "total_loss": [1.5]
+            "total_loss": [1.5],
         }
 
         caplog.set_level("INFO")
@@ -312,22 +339,22 @@ class TestSaveOutputs:
             style_name="wave",
             video_name="timelapse_cat_x_wave.mp4",
             normalize=False,
-            video_created=True
+            video_created=True,
         )
 
         assert "Video saved to:" in caplog.text
 
     def test_logs_creation(
         self,
-        tmp_path: Path,
-        caplog: pytest.LogCaptureFixture
-    ):
+        tmp_path: RealPath,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
         """Force logger.info for directory creation to execute."""
         caplog.set_level("INFO")
 
         # Force .exists() to return False so the mkdir logic runs
-        class CustomPath(Path):
-            def exists(self, **_kwargs) -> bool:
+        class CustomPath(RealPath):
+            def exists(self, **_kwargs: object) -> bool:
                 return False
 
         custom_path = CustomPath(tmp_path)
@@ -345,18 +372,19 @@ class TestSaveOutputs:
             style_name="coverage",
             video_name="timelapse_test_x_coverage.mp4",
             normalize=False,
-            video_created=True
+            video_created=True,
         )
 
         assert "Created output directory" in caplog.text
 
-    def test_handles_fallback(self, caplog: pytest.LogCaptureFixture):
+    def test_handles_fallback(self, caplog: pytest.LogCaptureFixture) -> None:
         """Simulate failure to create output directory and use fallback."""
-        class BrokenPath(Path):
-            def mkdir(self, *args: Any, **kwargs: Any) -> None:
-                raise PermissionError("Mocked mkdir failure")
+        class BrokenPath(RealPath):
+            def mkdir(self, *_args: object, **_kwargs: object) -> None:
+                msg = "Mocked mkdir failure"
+                raise PermissionError(msg)
 
-        fallback_path = Path.cwd() / "style_transfer_output"
+        fallback_path = RealPath.cwd() / "style_transfer_output"
         if fallback_path.exists():
             for file in fallback_path.iterdir():
                 file.unlink()
@@ -366,7 +394,7 @@ class TestSaveOutputs:
         loss_metrics = {
             "style_loss": [1.0],
             "content_loss": [0.5],
-            "total_loss": [1.5]
+            "total_loss": [1.5],
         }
 
         stv_utils.save_outputs(
@@ -378,7 +406,7 @@ class TestSaveOutputs:
             style_name="fallback",
             video_name=None,
             normalize=False,
-            video_created=False
+            video_created=False,
         )
 
         fallback_img = fallback_path / "stylized_test_x_fallback.png"
