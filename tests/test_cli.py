@@ -600,6 +600,7 @@ def test_script_main_entry(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         cwd=Path(__file__).parent.parent.resolve(),
+        env=env,
         timeout=180,
         check=False,
     )
