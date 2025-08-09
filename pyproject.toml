@@ -4,35 +4,69 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "style-transfer-visualizer"
-version = "1.1.0.dev1"
+version = "1.1.0.dev2"
 description = "A command-line tool for neural style transfer with PyTorch"
 authors = [{ name = "Ben Goldsmith" }]
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.12"
 dependencies = [
-    "torch==2.7.0",
-    "torchvision==0.22.0",
-    "tqdm==4.67.1",
-    "imageio==2.37.0",
-    "imageio-ffmpeg==0.6.0",
-    "matplotlib==3.10.3",
-    "pillow~=11.0.0",
-    "numpy~=2.1.2",
-    "tomlkit~=0.13.2",
-    "pydantic~=2.11.5"
+    "tqdm",
+    "imageio",
+    "imageio-ffmpeg",
+    "matplotlib",
+    "pillow",
+    "numpy",
+    "tomlkit",
+    "pydantic"
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest~=8.3.5",
-    "pytest-cov~=4.1.0",
-    "pytest-mock~=3.14.0",
-    "hypothesis~=6.131.19",
-    "pyright~=1.1.403",
-    "ruff~=0.12.4",
-    "pre-commit~=4.2.0"
+cpu = [
+    "torch",
+    "torchvision"
 ]
+cu128  = [
+    "torch",
+    "torchvision"
+]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "pytest-mock",
+    "hypothesis",
+    "pyright",
+    "ruff",
+    "pre-commit"
+]
+
+[tool.uv]
+conflicts = [
+  [
+    { extra = "cpu" },
+    { extra = "cu128" },
+  ],
+]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cu128", extra = "cu128" },
+]
+torchvision = [
+  { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cu128", extra = "cu128" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
 
 [project.scripts]
 style-visualizer = "style_transfer_visualizer.cli:main"

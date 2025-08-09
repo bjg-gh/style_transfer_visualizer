@@ -173,7 +173,7 @@ This issue tracks the version bump, tagging, and release publishing steps for `v
 
 - [ ] Review all issues completed in milestone `vX.X.X`
 - [ ] Create a release branch using this issue
-- [ ] Update `__version__.py` to `X.X.X`
+- [ ] Update `version` in `pyproject.toml` to `X.X.X`
 - [ ] Add release notes to RELEASES.md
 - [ ] Commit with:
   ```sh
@@ -209,7 +209,9 @@ When beginning work on a new milestone (e.g., `v1.1.0`), update the version in `
 **Use semantic pre-release notation** to signal active development:
 
 ```python
-__version__ = "1.1.0.dev0"
+[project]
+...
+version = "1.1.0.dev0"
 ```
 
 #### Steps:
@@ -220,7 +222,7 @@ __version__ = "1.1.0.dev0"
 
 2. Create a branch (e.g., `50-chore-bump-version-1.1.0-dev0`)
 
-3. Update `__version__.py` accordingly
+3. Update `pyproject.toml` `version` accordingly
 
 4. Commit with:
    ```sh
@@ -236,3 +238,27 @@ __version__ = "1.1.0.dev0"
 6. Squash and merge
 7. Delete the branch
 8. Move the issue to `Done`
+
+### Updated Versioning Policy
+
+Version numbers are stored only in the `pyproject.toml` file under the `[project]` section.
+
+Format:
+```
+MAJOR.MINOR.PATCH.devN
+```
+
+- **MAJOR**, **MINOR**, and **PATCH** numbers are updated via a dedicated issue, following the same process as before but editing `pyproject.toml` instead of `__version__.py`.
+- Each completed issue within a milestone increments the `.devN` suffix by 1.
+  - The first issue in a milestone starts at `.dev0`.
+  - The next completed issue is `.dev1`, then `.dev2`, and so on.
+- No separate commit is needed for `.devN` bumps; include the bump in the same commit as the issue work.
+- On release:
+  - Remove the `.devN` suffix in `pyproject.toml`.
+  - Tag the release with `vMAJOR.MINOR.PATCH`.
+  - After release, immediately bump the version to the next cycle's `.dev0`.
+
+This policy ensures:
+- Clear traceability of development progress between releases.
+- PEP 440–compliant version strings for tooling compatibility.
+- No extra commits purely for development version bumps.

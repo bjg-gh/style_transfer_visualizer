@@ -29,40 +29,28 @@ A command-line tool that applies neural style transfer to images using PyTorch. 
 ---
 
 ## Installation
-
-Create and activate a virtual environment:
-
-```bash
-python -m venv venv
-venv\Scripts\activate
-```
-
-Install dependencies:
+Set up your environment with uv (https://docs.astral.sh/uv/) and Python 3.12:
 
 ```bash
-pip install -e .[dev]
+uv venv --python=3.12
+uv sync --extra cu128 --extra dev
 ```
 
 ---
 
 ## Development Setup
 
-Install and enable pre-commit hooks:
+Run tests:
 
 ```bash
-pre-commit install
+uv run pytest
 ```
+Open `htmlcov/index.html` in your browser for a visual coverage report.
 
-Run all pre-commit hooks manually:
-
-```bash
-pre-commit run --all-files
-```
-
-Check static types:
+Run pre-commit hooks:
 
 ```bash
-pre-commit run pyright --all-files
+uv run pre-commit run --all-files
 ```
 
 ---
@@ -72,7 +60,7 @@ pre-commit run pyright --all-files
 Run the tool from the command line:
 
 ```bash
-style-visualizer --content path/to/content.jpg --style path/to/style.jpg
+uv run style-visualizer --content path/to/content.jpg --style path/to/style.jpg
 ```
 
 ### Common Options
@@ -176,20 +164,6 @@ style_transfer_visualizer/
 │   ├── test_video.py
 │   └── conftest.py
 ```
-
----
-
-## Testing
-
-Test suite includes full unit and integration coverage (100%).
-
-Run all tests:
-
-```bash
-pytest
-```
-
-Open `htmlcov/index.html` in your browser for a visual coverage report.
 
 ---
 
