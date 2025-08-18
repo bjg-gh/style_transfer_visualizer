@@ -86,14 +86,22 @@ class StyleTransferConfig(BaseModel):
     under logical categories.
     """
 
-    # NOTE: These `default_factory` assignments raise false-positive type
-    #       errors in Pyright.  We've added targeted ignores for now and will
-    #       remove them if and when we drop Pydantic.
-    output: OutputConfig = Field(default_factory=OutputConfig) # pyright: ignore[reportArgumentType]
-    optimization: OptimizationConfig = Field(default_factory
-                                             =OptimizationConfig) # pyright: ignore[reportArgumentType]
-    video: VideoConfig = Field(default_factory=VideoConfig) # pyright: ignore[reportArgumentType]
-    hardware: HardwareConfig = Field(default_factory=HardwareConfig) # pyright: ignore[reportArgumentType]
+    # model_validate({}) allows pyright to be happy playing with Pydantic.
+    # Pydantic v2 populates defaults from Field(...) declarations when
+    # validating an empty dict. Pyright is satisfied because a zero-arg lambda
+    # invokes a classmethod, not a constructor with missing args.
+    output: OutputConfig = Field(
+        default_factory=lambda: OutputConfig.model_validate({}),
+    )
+    optimization: OptimizationConfig = Field(
+        default_factory=lambda: OptimizationConfig.model_validate({}),
+    )
+    video: VideoConfig = Field(
+        default_factory=lambda: VideoConfig.model_validate({}),
+    )
+    hardware: HardwareConfig = Field(
+        default_factory=lambda: HardwareConfig.model_validate({}),
+    )
 
 
 class ConfigLoader:
