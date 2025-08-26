@@ -16,14 +16,18 @@ from pydantic import ValidationError
 
 import style_transfer_visualizer.config as stv_config
 from style_transfer_visualizer.config_defaults import (
+    DEFAULT_CONTENT_LAYERS,
     DEFAULT_CONTENT_WEIGHT,
     DEFAULT_DEVICE,
     DEFAULT_FPS,
     DEFAULT_INIT_METHOD,
     DEFAULT_LEARNING_RATE,
+    DEFAULT_LOG_EVERY,
+    DEFAULT_OUTPUT_DIR,
     DEFAULT_SAVE_EVERY,
     DEFAULT_SEED,
     DEFAULT_STEPS,
+    DEFAULT_STYLE_LAYERS,
     DEFAULT_STYLE_WEIGHT,
     DEFAULT_VIDEO_QUALITY,
 )
@@ -88,6 +92,7 @@ def test_partial_config_uses_defaults() -> None:
     assert cfg.optimization.lr == DEFAULT_LEARNING_RATE
     assert cfg.video.fps == DEFAULT_FPS
     assert cfg.hardware.device == DEFAULT_DEVICE
+
 
 def test_video_config_invalid_fps() -> None:
     """Ensure invalid fps raises ValidationError."""
@@ -158,3 +163,50 @@ def test_optimization_config_negative_seed() -> None:
                                       lr=DEFAULT_LEARNING_RATE,
                                       init_method=DEFAULT_INIT_METHOD)
     assert "seed" in str(exc_info.value)
+
+
+def test_video_config_fps_upper_bound() -> None:
+    """Ensure fps upper bound is enforced (must be <= 60)."""
+    with pytest.raises(ValidationError) as exc_info:
+        stv_config.VideoConfig(fps=100, quality=DEFAULT_VIDEO_QUALITY,
+                               save_every=DEFAULT_SAVE_EVERY)
+    assert "fps" in str(exc_info.value)
+
+
+def test_output_config_defaults() -> None:
+    """Validate OutputConfig defaults and types."""
+    cfg = stv_config.OutputConfig.model_validate({})
+    assert cfg.output == DEFAULT_OUTPUT_DIR
+    assert cfg.log_every == DEFAULT_LOG_EVERY
+    assert cfg.log_loss is None
+    assert cfg.plot_losses is True
+
+
+def test_loader_with_empty_toml_uses_all_defaults() -> None:
+    """Empty TOML should yield a fully defaulted config object."""
+    path = create_toml_file({})
+    cfg = stv_config.ConfigLoader.load(path)
+
+    assert cfg.optimization.steps == DEFAULT_STEPS
+    assert cfg.optimization.lr == DEFAULT_LEARNING_RATE
+    assert cfg.video.fps == DEFAULT_FPS
+    assert cfg.video.quality == DEFAULT_VIDEO_QUALITY
+    assert cfg.hardware.device == DEFAULT_DEVICE
+    assert cfg.output.output == DEFAULT_OUTPUT_DIR
+    assert cfg.output.log_every == DEFAULT_LOG_EVERY
+
+
+def test_loader_raises_on_invalid_types() -> None:
+    """Type errors in TOML should propagate as ValidationError."""
+    path = create_toml_file({
+        "optimization": {"steps": "not_an_int"},
+    })
+    with pytest.raises(ValidationError):
+        stv_config.ConfigLoader.load(path)
+
+
+def test_default_layer_indices_match_constants() -> None:
+    """Default style and content layer indices should match constants."""
+    cfg = stv_config.StyleTransferConfig.model_validate({})
+    assert cfg.optimization.style_layers == DEFAULT_STYLE_LAYERS
+    assert cfg.optimization.content_layers == DEFAULT_CONTENT_LAYERS

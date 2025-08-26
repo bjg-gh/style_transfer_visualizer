@@ -4,7 +4,7 @@
 repos:
   # Ruff: Linting, formatting, import sorting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.12.9
+    rev: v0.12.10
     hooks:
       - id: ruff
         name: Ruff Linter/Formatter
@@ -24,6 +24,6 @@ repos:
 
   # Pyrite
   - repo: https://github.com/ComPWA/pyright-pre-commit
-    rev: "v1.1.403"
+    rev: "v1.1.404"
     hooks:
       - id: pyright

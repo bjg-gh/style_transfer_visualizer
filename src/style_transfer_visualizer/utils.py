@@ -19,7 +19,7 @@ from style_transfer_visualizer.constants import (
     VIDEO_QUALITY_MIN,
 )
 from style_transfer_visualizer.logging_utils import logger
-from style_transfer_visualizer.type_defs import LossHistory
+from style_transfer_visualizer.type_defs import LossHistory, SaveOptions
 
 
 def setup_device(device_name: str) -> torch.device:
@@ -137,18 +137,12 @@ def plot_loss_curves(metrics: LossHistory, output_dir: Path) -> None:
         plt.close(fig)  # Ensure figure is closed to prevent memory leaks
 
 
-def save_outputs(  # noqa: PLR0913
+def save_outputs(
     input_img: torch.Tensor,
     loss_metrics: LossHistory,
     output_dir: Path,
     elapsed: float,
-    content_name: str,
-    style_name: str,
-    video_name: str | None = None,
-    *,
-    normalize: bool = True,
-    video_created: bool = True,
-    plot_losses: bool = True,
+    opts: SaveOptions,
 ) -> None:
     """Save final stylized image, optional video, and loss plot."""
     # Ensure output directory exists
@@ -165,17 +159,21 @@ def save_outputs(  # noqa: PLR0913
         output_dir = fallback_dir
 
     # Save the final stylized image
-    final_path = output_dir / f"stylized_{content_name}_x_{style_name}.png"
-    img_to_save = stv_image_io.prepare_image_for_output(input_img,
-                                                        normalize=normalize)
+    final_path = (
+        output_dir / f"stylized_{opts.content_name}_x_{opts.style_name}.png"
+    )
+    img_to_save = stv_image_io.prepare_image_for_output(
+        input_img,
+        normalize=opts.normalize,
+    )
     save_image(img_to_save, final_path)
 
     # Log video information
-    if video_created and video_name:
-        logger.info("Video saved to: %s", output_dir / video_name)
+    if opts.video_created and opts.video_name:
+        logger.info("Video saved to: %s", output_dir / opts.video_name)
 
     # Create and save loss plot
-    if plot_losses:
+    if opts.plot_losses:
         plot_loss_curves(loss_metrics, output_dir)
 
     # Log completion information

@@ -23,6 +23,7 @@ from torch.optim import Optimizer
 
 from style_transfer_visualizer.constants import COLOR_MODE_RGB
 from style_transfer_visualizer.logging_utils import logger
+from style_transfer_visualizer.type_defs import InputPaths
 
 
 @pytest.fixture
@@ -84,6 +85,13 @@ def content_image(test_dir: str) -> Path:
     path = Path(test_dir) / "content.jpg"
     img.save(path)
     return path
+
+
+@pytest.fixture
+def input_paths(content_image: Path, style_image: Path) -> InputPaths:
+    """Typed helper for passing content/style paths to the pipeline."""
+    return InputPaths(content_path=str(content_image),
+                      style_path=str(style_image))
 
 
 @pytest.fixture

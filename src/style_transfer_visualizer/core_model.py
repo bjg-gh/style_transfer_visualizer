@@ -17,10 +17,7 @@ from torch import nn
 from torch.nn.functional import mse_loss
 from torchvision.models import VGG19_Weights, vgg19
 
-from style_transfer_visualizer.config_defaults import (
-    DEFAULT_CONTENT_LAYERS,
-    DEFAULT_STYLE_LAYERS,
-)
+from style_transfer_visualizer.config import OptimizationConfig
 from style_transfer_visualizer.constants import GRAM_MATRIX_CLAMP_MAX
 from style_transfer_visualizer.type_defs import InitMethod, TensorList
 
@@ -318,33 +315,18 @@ class StyleContentModel(nn.Module):
         return style_losses, content_losses
 
 
-def prepare_model_and_input(  # noqa: PLR0913
+def prepare_model_and_input(
     content_img: torch.Tensor,
     style_img: torch.Tensor,
     device: torch.device,
-    init_method: InitMethod = "random",
-    learning_rate: float = 1.0,
-    style_layers: list[int] = DEFAULT_STYLE_LAYERS,
-    content_layers: list[int] = DEFAULT_CONTENT_LAYERS,
+    optimization: OptimizationConfig,
 ) -> tuple[nn.Module, torch.Tensor, torch.optim.Optimizer]:
-    """
-    Initialize the model and input image for style transfer.
-
-    Args:
-        content_img: Content image tensor
-        style_img: Style image tensor
-        device: Device to run the model on
-        init_method: Method to initialize the input image
-        learning_rate: Learning rate for the optimizer
-        style_layers: List of style layers to optimize
-        content_layers: List of content layers to optimize
-
-    Returns:
-        Tuple of (model, input_img, optimizer)
-
-    """
-    model = StyleContentModel(style_layers, content_layers).to(device)
+    """Create model, initialize input, and build optimizer."""
+    model = StyleContentModel(
+        style_layers=optimization.style_layers,
+        content_layers=optimization.content_layers,
+    ).to(device)
     model.set_targets(style_img, content_img)
-    input_img = initialize_input(content_img, init_method)
-    optimizer = torch.optim.LBFGS([input_img], lr=learning_rate)
+    input_img = initialize_input(content_img, optimization.init_method)
+    optimizer = torch.optim.LBFGS([input_img], lr=optimization.lr)
     return model, input_img, optimizer

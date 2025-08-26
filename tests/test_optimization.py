@@ -19,6 +19,7 @@ from torch.optim import Optimizer
 import style_transfer_visualizer.core_model as stv_core_model
 import style_transfer_visualizer.image_io as stv_image_io
 import style_transfer_visualizer.optimization as stv_optimization
+from style_transfer_visualizer.config import StyleTransferConfig
 
 
 @pytest.fixture
@@ -32,12 +33,14 @@ def setup_model_and_images(
     """Set up model and image tensors for integration testing."""
     style_img = stv_image_io.apply_transforms(
         stv_image_io.load_image(style_image), device=test_device,
-        normalize=True)
+        normalize=True,
+    )
     content_img = stv_image_io.apply_transforms(
         stv_image_io.load_image(content_image), device=test_device,
-        normalize=True)
+        normalize=True,
+    )
     model = stv_core_model.StyleContentModel(style_layers,
-                                  content_layers).to(test_device)
+                                             content_layers).to(test_device)
     model.set_targets(style_img, content_img)
     input_img = content_img.clone().requires_grad_(True)  # noqa: FBT003
     return model, style_img, content_img, input_img
@@ -55,9 +58,8 @@ def test_prepare_image_for_output_denormalized() -> None:
 class TestOptimization:
     """Tests optimization steps, logging, and loop execution."""
 
-    @pytest.mark.parametrize(
-        "opt_class", [torch.optim.Adam, torch.optim.LBFGS],
-    )
+    @pytest.mark.parametrize("opt_class",
+                             [torch.optim.Adam, torch.optim.LBFGS])
     def test_manual_closure_executes(
         self,
         setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
@@ -87,27 +89,26 @@ class TestOptimization:
         """Test basic functionality of a single optimization step."""
         model, _, _, input_img = setup_model_and_images
         optimizer = torch.optim.Adam([input_img], lr=0.01)
+
+        # Build config used by StepContext
+        config = StyleTransferConfig.model_validate({
+            "optimization": {"style_w": 1e5, "content_w": 1.0,
+                             "normalize": True},
+            "video": {"save_every": 10},
+        })
         progress = mocker.MagicMock()
-        metrics = {
-            "style_loss": [],
-            "content_loss": [],
-            "total_loss": [],
-        }
+        ctx = stv_optimization.StepContext(config=config,
+                                           progress_bar=progress,
+                                           video_writer=None, loss_metrics={
+                                               "style_loss": [],
+                                               "content_loss": [],
+                                               "total_loss": [],
+                                           }, loss_logger=None)
         loss = stv_optimization.optimization_step(
-            model,
-            input_img,
-            optimizer,
-            1e5,
-            1.0,
-            metrics,
-            0,
-            10,
-            None,
-            progress,
-            normalize=True,
+            model, input_img, optimizer, step=0, ctx=ctx,
         )
         assert isinstance(loss, float)
-        assert len(metrics["total_loss"]) == 1
+        assert len(ctx.loss_metrics["total_loss"]) == 1  # type: ignore[index]
         progress.update.assert_called_once()
 
     def test_optimization_step_save_frame(
@@ -118,25 +119,20 @@ class TestOptimization:
         """Test frame is saved if step is divisible by save_every."""
         model, _, _, input_img = setup_model_and_images
         optimizer = torch.optim.Adam([input_img])
-        progress = mocker.MagicMock()
         video = mocker.MagicMock()
-        metrics = {
-            "style_loss": [],
-            "content_loss": [],
-            "total_loss": [],
-        }
+        progress = mocker.MagicMock()
+
+        config = StyleTransferConfig.model_validate({
+            "optimization": {"style_w": 1e5, "content_w": 1.0,
+                             "normalize": True},
+            "video": {"save_every": 10},
+        })
+        ctx = stv_optimization.StepContext(config, progress, video, {
+            "style_loss": [], "content_loss": [], "total_loss": [],
+        })
+
         stv_optimization.optimization_step(
-            model,
-            input_img,
-            optimizer,
-            1e5,
-            1.0,
-            metrics,
-            10,
-            10,
-            video,
-            progress,
-            normalize=True,
+            model, input_img, optimizer, step=10, ctx=ctx,
         )
         assert video.append_data.called
 
@@ -157,24 +153,17 @@ class TestOptimization:
 
         opt = torch.optim.Adam([input_img])
         progress = mocker.MagicMock()
-        metrics = {
-            "style_loss": [],
-            "content_loss": [],
-            "total_loss": [],
-        }
+        config = StyleTransferConfig.model_validate({
+            "optimization": {"style_w": 1e5, "content_w": 1.0,
+                             "normalize": True},
+            "video": {"save_every": 10},
+        })
+        ctx = stv_optimization.StepContext(config, progress, None, {
+            "style_loss": [], "content_loss": [], "total_loss": [],
+        })
 
         stv_optimization.optimization_step(
-            model,
-            input_img,
-            opt,
-            1e5,
-            1.0,
-            metrics,
-            0,
-            10,
-            None,
-            progress,
-            normalize=True,
+            model, input_img, opt, step=0, ctx=ctx,
         )
 
         assert "Non-finite" in caplog.text
@@ -193,18 +182,17 @@ class TestOptimization:
         patch = mocker.patch.object(stv_image_io, "prepare_image_for_output")
         patch.return_value = input_img.detach()
 
+        config = StyleTransferConfig.model_validate({
+            "optimization": {"style_w": 1e5, "content_w": 1.0,
+                             "normalize": False},
+            "video": {"save_every": 10},
+        })
+        ctx = stv_optimization.StepContext(config, progress, writer, {
+            "style_loss": [], "content_loss": [], "total_loss": [],
+        })
+
         stv_optimization.optimization_step(
-            model,
-            input_img,
-            optimizer,
-            1e5,
-            1.0,
-            {"style_loss": [], "content_loss": [], "total_loss": []},
-            10,
-            10,
-            writer,
-            progress,
-            normalize=False,
+            model, input_img, optimizer, step=10, ctx=ctx,
         )
 
         patch.assert_called_once()
@@ -218,27 +206,25 @@ class TestOptimization:
         """Test frame is not written when prepare_image returns None."""
         model, _, _, input_img = setup_model_and_images
         optimizer = torch.optim.Adam([input_img])
-        mocker.patch.object(
-            stv_image_io,
-            "prepare_image_for_output",
-            return_value=None,
-        )
+        mocker.patch.object(stv_image_io, "prepare_image_for_output",
+                            return_value=None)
         video_writer = mocker.MagicMock()
         progress_bar = mocker.MagicMock()
-        metrics = {"style_loss": [], "content_loss": [], "total_loss": []}
+
+        config = StyleTransferConfig.model_validate({
+            "optimization": {"style_w": 1e5, "content_w": 1.0,
+                             "normalize": True},
+            "video": {"save_every": 10},
+        })
+        ctx = stv_optimization.StepContext(config, progress_bar, video_writer,
+                                           { "style_loss": [],
+                                             "content_loss": [],
+                                             "total_loss": [],
+                                             },
+                                           )
 
         stv_optimization.optimization_step(
-            model,
-            input_img,
-            optimizer,
-            1e5,
-            1.0,
-            metrics,
-            10,
-            10,
-            video_writer,
-            progress_bar,
-            normalize=True,
+            model, input_img, optimizer, step=10, ctx=ctx,
         )
 
         video_writer.append_data.assert_not_called()
@@ -250,10 +236,15 @@ class TestOptimization:
         """Test full optimization loop runs and returns valid output."""
         model, _, _, input_img = setup_model_and_images
         optimizer = torch.optim.LBFGS([input_img])
+
+        config = StyleTransferConfig.model_validate({
+            "optimization": {"steps": 2, "style_w": 1.0, "content_w": 1.0,
+                             "normalize": True},
+            "video": {"save_every": 1},
+        })
+
         result_img, metrics, elapsed = stv_optimization.run_optimization_loop(
-            model, input_img, optimizer,
-            steps=2, save_every=1, style_weight=1.0,
-            content_weight=1.0, normalize=True, video_writer=None,
+            model, input_img, optimizer, config=config, video_writer=None,
         )
         assert isinstance(result_img, torch.Tensor)
         assert isinstance(metrics, dict)
@@ -266,7 +257,7 @@ class TestOptimization:
         setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
         mocker: MockerFixture,
     ) -> None:
-        """LossCSVLogger is initialized and used when log_loss_path is set."""
+        """LossCSVLogger is initialized and used when log_loss is set."""
         model, _, _, input_img = setup_model_and_images
         optimizer = torch.optim.Adam([input_img])
 
@@ -276,11 +267,15 @@ class TestOptimization:
             autospec=True,
         )
 
+        config = StyleTransferConfig.model_validate({
+            "optimization": {"steps": 2, "style_w": 1.0, "content_w": 1.0,
+                             "normalize": True},
+            "video": {"save_every": 1},
+            "output": {"log_loss": "losses.csv", "log_every": 1},
+        })
+
         result_img, metrics, elapsed = stv_optimization.run_optimization_loop(
-            model, input_img, optimizer,
-            steps=2, save_every=1, style_weight=1.0,
-            content_weight=1.0, normalize=True, video_writer=None,
-            log_loss_path="losses.csv", log_every=1,
+            model, input_img, optimizer, config=config, video_writer=None,
         )
 
         # Assert CSV logger lifecycle
@@ -298,10 +293,14 @@ class TestOptimization:
         model, _, _, input_img = setup_model_and_images
         optimizer = torch.optim.Adam([input_img])
 
+        config = StyleTransferConfig.model_validate({
+            "optimization": {"steps": 2, "style_w": 1.0, "content_w": 1.0,
+                             "normalize": True},
+            "video": {"save_every": 1},
+        })
+
         result_img, metrics, elapsed = stv_optimization.run_optimization_loop(
-            model, input_img, optimizer,
-            steps=2, save_every=1, style_weight=1.0,
-            content_weight=1.0, normalize=True, video_writer=None,
+            model, input_img, optimizer, config=config, video_writer=None,
         )
 
         assert isinstance(metrics, dict)
@@ -314,28 +313,30 @@ class TestOptimization:
         mocker: MockerFixture,
         caplog: LogCaptureFixture,
     ) -> None:
-        """Test that OSError is logged and fallback occurs."""
+        """Test that OSError is logged and no in-memory fallback occurs."""
         model, _, _, input_img = setup_model_and_images
         optimizer = torch.optim.Adam([input_img])
 
         # Patch LossCSVLogger to raise OSError
-        mocker.patch(
-            "style_transfer_visualizer.optimization.LossCSVLogger",
-            side_effect=OSError("Mocked failure"),
-        )
+        mocker.patch("style_transfer_visualizer.optimization.LossCSVLogger",
+                     side_effect=OSError("Mocked failure"))
 
         caplog.set_level("ERROR")
 
-        # Run optimization loop with CSV logging
+        config = StyleTransferConfig.model_validate({
+            "optimization": {"steps": 1, "style_w": 1.0, "content_w": 1.0,
+                             "normalize": True},
+            "video": {"save_every": 1},
+            "output": {"log_loss": "losses.csv", "log_every": 1},
+        })
+
+        # Run optimization loop with CSV logging (will fail to init)
         result_img, metrics, elapsed = stv_optimization.run_optimization_loop(
-            model, input_img, optimizer,
-            steps=1, save_every=1, style_weight=1.0,
-            content_weight=1.0, normalize=True, video_writer=None,
-            log_loss_path="losses.csv", log_every=1,
+            model, input_img, optimizer, config=config, video_writer=None,
         )
 
-        # Should fallback to in-memory logging
-        assert isinstance(metrics, dict)
+        # Should NOT fallback to in-memory logging in current implementation
+        assert metrics == {}
         assert "Failed to initialize CSV logging" in caplog.text
 
     def test_long_run_warning_when_no_csv_logging(
@@ -349,11 +350,14 @@ class TestOptimization:
 
         caplog.set_level("WARNING")
 
+        config = StyleTransferConfig.model_validate({
+            "optimization": {"steps": 2500, "style_w": 1.0, "content_w": 1.0,
+                             "normalize": True},
+            "video": {"save_every": 500},
+        })
+
         stv_optimization.run_optimization_loop(
-            model, input_img, optimizer,
-            steps=2500,  # > 2000 triggers warning
-            save_every=500, style_weight=1.0,
-            content_weight=1.0, normalize=True, video_writer=None,
+            model, input_img, optimizer, config=config, video_writer=None,
         )
 
         assert "Long run detected" in caplog.text

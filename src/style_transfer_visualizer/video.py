@@ -4,6 +4,7 @@ from pathlib import Path
 
 import imageio
 
+from style_transfer_visualizer.config import VideoConfig
 from style_transfer_visualizer.constants import (
     ENCODING_BLOCK_SIZE,
     VIDEO_CODEC,
@@ -11,22 +12,30 @@ from style_transfer_visualizer.constants import (
 
 
 def setup_video_writer(
+    config: VideoConfig,
     output_path: Path,
     video_name: str,
-    fps: int,
-    video_quality: int,
-    *,
-    create_video: bool,
 ) -> imageio.plugins.ffmpeg.FfmpegFormat.Writer | None:
-    """Initialize video writer if requested."""
-    if not create_video:
+    """
+    Initialize a timelapse video writer if requested.
+
+    Args:
+        config: Validated video configuration.
+        output_path: Directory where the video will be written.
+        video_name: Filename for the output video.
+
+    Returns:
+        An imageio writer or None if video creation is disabled.
+
+    """
+    if not config.create_video:
         return None
 
     return imageio.get_writer(
         output_path / video_name,
-        fps=fps,
+        fps=config.fps,
         codec=VIDEO_CODEC,
-        quality=video_quality,
-        mode="I",  # Explicitly set mode for clarity
+        quality=config.quality,
+        mode="I",
         macro_block_size=ENCODING_BLOCK_SIZE,
     )
