@@ -3,7 +3,6 @@
 import argparse
 import sys
 from pathlib import Path
-from typing import Any
 
 import style_transfer_visualizer.config as stv_config
 import style_transfer_visualizer.main as stv_main
@@ -13,6 +12,7 @@ from style_transfer_visualizer.constants import (
     VIDEO_QUALITY_MIN,
 )
 from style_transfer_visualizer.logging_utils import logger
+from style_transfer_visualizer.type_defs import InputPaths
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -128,31 +128,35 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return p
 
 
-def log_parameters(p: dict[str, Any], args: argparse.Namespace) -> None:
-    """Log all user-provided command-line parameters."""
-    logger.info("Content image loaded: %s", p["content_path"])
-    logger.info("Style image loaded: %s", p["style_path"])
-    if hasattr(args, "config"):
+def log_parameters(
+    paths: InputPaths,
+    cfg: stv_config.StyleTransferConfig,
+    args: argparse.Namespace,
+) -> None:
+    """Log all user-provided parameters."""
+    logger.info("Content image loaded: %s", paths.content_path)
+    logger.info("Style image loaded: %s", paths.style_path)
+    if getattr(args, "config", None):
         logger.info("Loaded config from: %s", args.config)
-    logger.info("Output Directory: %s", p["output_dir"])
-    logger.info("Steps: %d", p["steps"])
-    logger.info("Save Every: %d", p["save_every"])
-    logger.info("Style Weight: %g", p["style_weight"])
-    logger.info("Content Weight: %g", p["content_weight"])
-    logger.info("Learning Rate: %g", p["learning_rate"])
-    logger.info("Style Layers: %s", p["style_layers"])
-    logger.info("Content Layers: %s", p["content_layers"])
-    logger.info("FPS for Timelapse Video: %d", p["fps"])
-    logger.info("Video Quality: %d (%d-%d scale)", p["video_quality"],
+    logger.info("Output Directory: %s", cfg.output.output)
+    logger.info("Steps: %d", cfg.optimization.steps)
+    logger.info("Save Every: %d", cfg.video.save_every)
+    logger.info("Style Weight: %g", cfg.optimization.style_w)
+    logger.info("Content Weight: %g", cfg.optimization.content_w)
+    logger.info("Learning Rate: %g", cfg.optimization.lr)
+    logger.info("Style Layers: %s", cfg.optimization.style_layers)
+    logger.info("Content Layers: %s", cfg.optimization.content_layers)
+    logger.info("FPS for Timelapse Video: %d", cfg.video.fps)
+    logger.info("Video Quality: %d (%d-%d scale)", cfg.video.quality,
                 VIDEO_QUALITY_MIN, VIDEO_QUALITY_MAX)
-    logger.info("Initialization Method: %s", p["init_method"])
+    logger.info("Initialization Method: %s", cfg.optimization.init_method)
     logger.info("Normalization: %s",
-                "Enabled" if p["normalize"] else "Disabled")
+                "Enabled" if cfg.optimization.normalize else "Disabled")
     logger.info("Video Creation: %s",
-                "Enabled" if p["create_video"] else "Disabled")
+                "Enabled" if cfg.video.create_video else "Disabled")
     logger.info("Loss Plotting: %s",
-                "Enabled" if p["plot_losses"] else "Disabled")
-    logger.info("Random Seed: %d", p["seed"])
+                "Enabled" if cfg.output.plot_losses else "Disabled")
+    logger.info("Random Seed: %d", cfg.optimization.seed)
 
 
 def parse_int_list(s: str | list[int]) -> list[int]:
@@ -171,56 +175,104 @@ def parse_int_list(s: str | list[int]) -> list[int]:
     return list(map(int, s.split(",")))
 
 
-def run_from_args(args: argparse.Namespace) -> None:
-    """Run style transfer from command-line arguments."""
-    config = stv_config.StyleTransferConfig()
-    if args.config:
-        config = stv_config.ConfigLoader.load(args.config)
-        if args.validate_config_only:
-            logger.info("Config %s validated successfully.", args.config)
-            sys.exit(0)
+def _apply_output_overrides(
+    cfg: stv_config.StyleTransferConfig,
+    args: argparse.Namespace,
+) -> None:
+    """Apply CLI overrides for the [output] section."""
+    if hasattr(args, "output"):
+        cfg.output.output = args.output
+    if hasattr(args, "log_every"):
+        cfg.output.log_every = args.log_every
+    if hasattr(args, "log_loss"):
+        cfg.output.log_loss = args.log_loss  # type: ignore[attr-defined]
+    if getattr(args, "no_plot", False):
+        cfg.output.plot_losses = False
 
-    def get(attr: str, section: str) -> Any: # noqa: ANN401
-        if hasattr(args, attr) and getattr(args, attr) is not None:
-            return getattr(args, attr)
-        return getattr(getattr(config, section), attr)
 
-    params: dict[str, Any] = {
-        "content_path": args.content,
-        "style_path": args.style,
-        "output_dir": get("output", "output"),
-        "log_loss_path": getattr(args, "log_loss", None),
-        "log_every": get("log_every", "output"),
-        "steps": get("steps", "optimization"),
-        "save_every": get("save_every", "video"),
-        "style_weight": get("style_w", "optimization"),
-        "content_weight": get("content_w", "optimization"),
-        "learning_rate": get("lr", "optimization"),
-        "style_layers": parse_int_list(get("style_layers", "optimization")),
-        "content_layers": parse_int_list(get("content_layers",
-                                             "optimization")),
-        "fps": get("fps", "video"),
-        "device_name": get("device", "hardware"),
-        "init_method": get("init_method", "optimization"),
-        "normalize": not getattr(args, "no_normalize", False),
-        "create_video": not getattr(args, "no_video", False),
-        "final_only": getattr(args, "final_only", False),
-        "video_quality": get("quality", "video"),
-        "seed": get("seed", "optimization"),
-        "plot_losses": not getattr(args, "no_plot", False),
-    }
+def _apply_optimization_overrides(
+    cfg: stv_config.StyleTransferConfig,
+    args: argparse.Namespace,
+) -> None:
+    """Apply CLI overrides for the [optimization] section."""
+    if hasattr(args, "steps"):
+        cfg.optimization.steps = args.steps
+    if hasattr(args, "style_w"):
+        cfg.optimization.style_w = args.style_w
+    if hasattr(args, "content_w"):
+        cfg.optimization.content_w = args.content_w
+    if hasattr(args, "lr"):
+        cfg.optimization.lr = args.lr
+    if hasattr(args, "init_method"):
+        cfg.optimization.init_method = args.init_method
+    if hasattr(args, "seed"):
+        cfg.optimization.seed = args.seed
+    if getattr(args, "no_normalize", False):
+        cfg.optimization.normalize = False
+    if getattr(args, "style_layers", None):
+        cfg.optimization.style_layers = parse_int_list(args.style_layers)
+    if getattr(args, "content_layers", None):
+        cfg.optimization.content_layers = parse_int_list(args.content_layers)
 
-    # Disable loss plotting if CSV logging is active
-    if params["log_loss_path"] and params["plot_losses"]:
+
+def _apply_video_overrides(
+    cfg: stv_config.StyleTransferConfig,
+    args: argparse.Namespace,
+) -> None:
+    """Apply CLI overrides for the [video] section."""
+    if hasattr(args, "save_every"):
+        cfg.video.save_every = args.save_every
+    if hasattr(args, "fps"):
+        cfg.video.fps = args.fps
+    if hasattr(args, "quality"):
+        cfg.video.quality = args.quality
+    if getattr(args, "no_video", False):
+        cfg.video.create_video = False
+    if getattr(args, "final_only", False):
+        cfg.video.final_only = True
+
+
+def _apply_hardware_overrides(
+    cfg: stv_config.StyleTransferConfig,
+    args: argparse.Namespace,
+) -> None:
+    """Apply CLI overrides for the [hardware] section."""
+    if hasattr(args, "device"):
+        cfg.hardware.device = args.device
+
+
+def _enforce_csv_plot_rule(cfg: stv_config.StyleTransferConfig) -> None:
+    """Disable plotting when CSV logging is enabled, with a warning."""
+    if getattr(cfg.output, "log_loss", None) and cfg.output.plot_losses:
         logger.warning(
             "Loss plotting is disabled because CSV logging is enabled. "
             "Only loss CSV will be created.",
         )
-        params["plot_losses"] = False
+        cfg.output.plot_losses = False
 
-    log_parameters(params, args)
 
-    stv_main.style_transfer(**params)
+def run_from_args(args: argparse.Namespace) -> None:
+    """Run style transfer from command-line arguments."""
+    cfg = stv_config.StyleTransferConfig.model_validate({})  # defaults
+    if args.config:
+        cfg = stv_config.ConfigLoader.load(args.config)
+        if args.validate_config_only:
+            logger.info("Config %s validated successfully.", args.config)
+            sys.exit(0)
+
+    # Apply CLI overrides by section
+    _apply_output_overrides(cfg, args)
+    _apply_optimization_overrides(cfg, args)
+    _apply_video_overrides(cfg, args)
+    _apply_hardware_overrides(cfg, args)
+
+    # CSV disables plot
+    _enforce_csv_plot_rule(cfg)
+
+    paths = InputPaths(content_path=args.content, style_path=args.style)
+    log_parameters(paths, cfg, args)
+
+    stv_main.style_transfer(paths, cfg)
 
 
 def main() -> None:

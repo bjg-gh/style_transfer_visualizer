@@ -5,9 +5,8 @@ Covers:
 - Input initialization strategies
 - Gram matrix properties
 - StyleContentModel forward loss computation
-- Optimization step and loop
+- Factory: prepare_model_and_input uses OptimizationConfig
 """
-
 from typing import TYPE_CHECKING, cast
 
 import pytest
@@ -16,30 +15,31 @@ from pytest_mock import MockerFixture
 from torch import Tensor
 
 import style_transfer_visualizer.core_model as stv_core_model
+from style_transfer_visualizer.config import OptimizationConfig
 
 if TYPE_CHECKING:
     from style_transfer_visualizer.type_defs import InitMethod
 
 
 class TestInitializeInput:
-    """Test for input tensor initialization strategies."""
+    """Tests for input tensor initialization strategies."""
 
     def test_content_method(self, sample_tensor: Tensor) -> None:
-        """Test content-based initialization returns correct values."""
+        """Test content-based init returns correct values."""
         result = stv_core_model.initialize_input(sample_tensor, "content")
         assert torch.allclose(result, sample_tensor)
         assert result.requires_grad
         assert not sample_tensor.requires_grad
 
     def test_random_method(self, sample_tensor: Tensor) -> None:
-        """Test random initialization returns non-content values."""
+        """Test random init returns non-content values."""
         result = stv_core_model.initialize_input(sample_tensor, "random")
         assert result.shape == sample_tensor.shape
         assert not torch.allclose(result, sample_tensor)
         assert result.requires_grad
 
     def test_white_method(self, sample_tensor: Tensor) -> None:
-        """Test white initialization returns ones tensor."""
+        """Test white init returns ones tensor."""
         result = stv_core_model.initialize_input(sample_tensor, "white")
         assert torch.allclose(result, torch.ones_like(sample_tensor))
         assert result.requires_grad
@@ -89,7 +89,7 @@ def test_gram_matrix_properties(sample_tensor: Tensor) -> None:
 
 
 class TestStyleContentModel:
-    """Test for StyleContentModel loss computation behavior."""
+    """Tests for StyleContentModel loss computation behavior."""
 
     def test_forward_loss_accumulation(
         self,
@@ -124,8 +124,88 @@ class TestStyleContentModel:
         model.style_targets = [input_tensor]
 
         # Mock style loss computation to bypass unrelated errors
-        mocker.patch.object(model, "_compute_style_losses",
-                            return_value=[torch.tensor(0.0)])
+        mocker.patch.object(
+            model, "_compute_style_losses", return_value=torch.tensor(0.0),
+        )
 
         with pytest.raises(RuntimeError, match="content_targets must be set"):
             model(input_tensor)
+
+
+class TestFactoryFunction:
+    """Tests for prepare_model_and_input factory behavior."""
+
+    def test_prepare_model_and_input_uses_optimization_config(
+        self,
+        sample_tensor: Tensor,
+        mocker: MockerFixture,
+    ) -> None:
+        """Prepare a model using optimization config."""
+        # Build a tiny fake "VGG" to avoid heavyweight downloads.
+        fake_vgg = torch.nn.Sequential(
+            torch.nn.Conv2d(3, 8, 3, padding=1),
+            torch.nn.ReLU(inplace=True),
+            torch.nn.Conv2d(8, 8, 3, padding=1),
+            torch.nn.ReLU(inplace=True),
+            torch.nn.Conv2d(8, 8, 3, padding=1),
+        )
+        mocker.patch.object(stv_core_model, "initialize_vgg",
+                            return_value=fake_vgg)
+
+        # Prepare small content/style tensors on CPU.
+        device = torch.device("cpu")
+        content = sample_tensor.to(device)
+        style = sample_tensor.to(device)
+
+        # Construct an OptimizationConfig with simple indices.
+        opt_cfg = OptimizationConfig.model_validate({
+            "style_layers": [1],  # ReLU index in our fake net
+            "content_layers": [2],  # Conv index after first ReLU
+            "init_method": "content",
+            "lr": 0.5,
+        })
+
+        model, input_img, optimizer = stv_core_model.prepare_model_and_input(
+            content_img=content,
+            style_img=style,
+            device=device,
+            optimization=opt_cfg,
+        )
+
+        # Validate model wiring and optimizer type/params.
+        assert isinstance(model, stv_core_model.StyleContentModel)
+        assert input_img.requires_grad is True
+        assert any(p is input_img for p in optimizer.param_groups[0]["params"])
+        assert optimizer.param_groups[0]["lr"] == pytest.approx(opt_cfg.lr)
+
+        # Targets should be set by the factory.
+        assert model.style_targets is not None
+        assert model.content_targets is not None
+
+    def test_relu_inplace_disabled_in_blocks(
+        self,
+        mocker: MockerFixture,
+    ) -> None:
+        """
+        Test that ReLU layers inside created blocks are not inplace.
+
+        This safeguards against autograd issues.
+        """
+        fake_vgg = torch.nn.Sequential(
+            torch.nn.Conv2d(3, 4, 3, padding=1),
+            torch.nn.ReLU(inplace=True),  # Will be replaced to inplace=False
+            torch.nn.Conv2d(4, 4, 3, padding=1),
+            torch.nn.ReLU(inplace=True),
+        )
+        mocker.patch.object(stv_core_model, "initialize_vgg",
+                            return_value=fake_vgg)
+
+        model = stv_core_model.StyleContentModel([1], [2])
+        # Inspect internal blocks for ReLU inplace flags.
+        found_relu = False
+        for block in model.vgg_blocks:
+            for layer in block.children():
+                if isinstance(layer, torch.nn.ReLU):
+                    found_relu = True
+                    assert layer.inplace is False
+        assert found_relu is True

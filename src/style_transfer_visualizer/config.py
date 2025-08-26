@@ -34,6 +34,7 @@ from style_transfer_visualizer.constants import (
     VIDEO_QUALITY_MAX,
     VIDEO_QUALITY_MIN,
 )
+from style_transfer_visualizer.type_defs import InitMethod
 
 
 class OptimizationConfig(BaseModel):
@@ -43,13 +44,15 @@ class OptimizationConfig(BaseModel):
     style_w: float = Field(DEFAULT_STYLE_WEIGHT, ge=0)
     content_w: float = Field(DEFAULT_CONTENT_WEIGHT, ge=0)
     lr: float = Field(DEFAULT_LEARNING_RATE, gt=0)
-    init_method: str = Field(DEFAULT_INIT_METHOD)
+    init_method: InitMethod = Field(DEFAULT_INIT_METHOD)
     seed: int = Field(DEFAULT_SEED, ge=0)
     normalize: bool = DEFAULT_NORMALIZE
     style_layers: list[int] = Field(
-        default_factory=lambda: DEFAULT_STYLE_LAYERS)
+        default_factory=lambda: DEFAULT_STYLE_LAYERS,
+    )
     content_layers: list[int] = Field(
-        default_factory=lambda: DEFAULT_CONTENT_LAYERS)
+        default_factory=lambda: DEFAULT_CONTENT_LAYERS,
+    )
 
 class VideoConfig(BaseModel):
     """Control settings for video output."""
@@ -76,6 +79,8 @@ class OutputConfig(BaseModel):
 
     output: str = Field(DEFAULT_OUTPUT_DIR)
     log_every: int = Field(DEFAULT_LOG_EVERY, ge=1)
+    log_loss: str | None = None
+    plot_losses: bool = True
 
 
 class StyleTransferConfig(BaseModel):

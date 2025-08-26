@@ -1,11 +1,12 @@
 """Shared default values for user-facing configuration settings."""
+from style_transfer_visualizer.type_defs import InitMethod
 
 # Optimization
 DEFAULT_STEPS = 1500
 DEFAULT_STYLE_WEIGHT = 1e5
 DEFAULT_CONTENT_WEIGHT = 1.0
 DEFAULT_LEARNING_RATE = 1.0
-DEFAULT_INIT_METHOD = "random"
+DEFAULT_INIT_METHOD: InitMethod = "random"
 DEFAULT_SEED = 0
 DEFAULT_NORMALIZE = True
 # From torchvision.models.vgg19.

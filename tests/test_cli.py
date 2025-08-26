@@ -12,22 +12,22 @@ Modules tested:
 Simulates CLI usage with monkeypatching and verifies end-to-end flow.
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import subprocess
 import sys
-from contextlib import suppress
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import torch
-from _pytest.logging import LogCaptureFixture
-from _pytest.monkeypatch import MonkeyPatch
 from PIL import Image
 
 import style_transfer_visualizer.cli as stv_cli
 import style_transfer_visualizer.main as stv_main
+from style_transfer_visualizer.config import StyleTransferConfig
 from style_transfer_visualizer.config_defaults import (
     DEFAULT_CONTENT_WEIGHT,
     DEFAULT_DEVICE,
@@ -41,6 +41,12 @@ from style_transfer_visualizer.config_defaults import (
     DEFAULT_STYLE_WEIGHT,
     DEFAULT_VIDEO_QUALITY,
 )
+from style_transfer_visualizer.type_defs import InputPaths
+
+if TYPE_CHECKING:
+    from _pytest.logging import LogCaptureFixture
+    from _pytest.monkeypatch import MonkeyPatch
+
 
 
 class TestCLIArgumentParsing:
@@ -70,10 +76,12 @@ class TestCLIArgumentParsing:
             stv_cli.main()
 
     @pytest.mark.parametrize(
-        ("style_str", "content_str", "expected_style", "expected_content"), [
+        ("style_str", "content_str", "expected_style", "expected_content"),
+        [
             ("0,1,2", "3", [0, 1, 2], [3]),
             ("5", "10,15", [5], [10, 15]),
-        ])
+        ],
+    )
     def test_layer_args_are_parsed(
         self,
         monkeypatch: MonkeyPatch,
@@ -107,14 +115,25 @@ class TestCLIArgumentParsing:
         )
 
         captured: dict[str, Any] = {}
-        monkeypatch.setattr(stv_main, "style_transfer",
-                            lambda **kwargs: captured.update(
-                                kwargs) or torch.rand(1))
+
+        def fake_run(
+            paths: InputPaths,
+            st_config: StyleTransferConfig,
+        ) -> torch.Tensor:
+            captured["paths"] = paths
+            captured["cfg"] = st_config
+            return torch.rand(1)
+
+        monkeypatch.setattr(stv_main, "style_transfer", fake_run)
         monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
 
         stv_cli.run_from_args(args)
-        assert captured["style_layers"] == expected_style
-        assert captured["content_layers"] == expected_content
+
+        cfg_seen = captured["cfg"]
+        opt_dict = cfg_seen.optimization.model_dump()
+
+        assert opt_dict["style_layers"] == expected_style
+        assert opt_dict["content_layers"] == expected_content
 
     def test_log_loss_and_log_every_flags(self) -> None:
         """Test that --log-loss and --log-every are parsed correctly."""
@@ -147,9 +166,9 @@ class TestCLIRunFromArgs:
             validate_config_only=True,
         )
 
-        exit_called = {}
+        exit_called: dict[str, int] = {}
 
-        def fake_exit(code: int=0) -> None:
+        def fake_exit(code: int = 0) -> None:
             exit_called["code"] = code
             raise SystemExit
 
@@ -184,15 +203,30 @@ class TestCLIRunFromArgs:
             device="cpu",
         )
 
-        captured = {}
-        monkeypatch.setattr(stv_main, "style_transfer",
-            lambda **kwargs: captured.update(kwargs) or torch.rand(1))
+        captured: dict[str, Any] = {}
+
+        def fake_run(
+            paths: InputPaths,
+            st_config: StyleTransferConfig,
+        ) -> torch.Tensor:
+            captured["paths"] = paths
+            captured["cfg"] = st_config
+            return torch.rand(1)
+
+        monkeypatch.setattr(stv_main, "style_transfer", fake_run)
         monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
 
         stv_cli.run_from_args(args)
-        assert captured["steps"] == 123  # noqa: PLR2004
-        assert captured["normalize"] is True
-        assert captured["create_video"] is True
+        cfg = captured["cfg"]
+        assert cfg.optimization.steps == 123  # noqa: PLR2004
+        assert cfg.optimization.normalize is True
+        assert cfg.video.create_video is True
+        assert cfg.video.final_only is True
+        assert cfg.video.fps == 20  # noqa: PLR2004
+        assert cfg.video.quality == 7  # noqa: PLR2004
+        assert cfg.video.save_every == 10  # noqa: PLR2004
+        assert cfg.optimization.init_method == "white"
+        assert cfg.output.output == "out"
 
     def test_flags_flip_behavior(self, monkeypatch: MonkeyPatch) -> None:
         """Test that --no-* flags flip behavior correctly."""
@@ -217,22 +251,32 @@ class TestCLIRunFromArgs:
             device=DEFAULT_DEVICE,
         )
 
-        captured = {}
-        monkeypatch.setattr(stv_main, "style_transfer",
-            lambda **kwargs: captured.update(kwargs) or torch.rand(1))
+        captured: dict[str, Any] = {}
+
+        def fake_run(
+            _paths: InputPaths,
+            st_config: StyleTransferConfig,
+        ) -> torch.Tensor:
+            captured["cfg"] = st_config
+            return torch.rand(1)
+
+        monkeypatch.setattr(stv_main, "style_transfer", fake_run)
         monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
 
         stv_cli.run_from_args(args)
-        assert captured["normalize"] is False
-        assert captured["create_video"] is False
-
+        cfg = captured["cfg"]
+        assert cfg.optimization.normalize is False
+        assert cfg.video.create_video is False
 
     def test_run_from_args_config_not_validating(
-        self, monkeypatch: MonkeyPatch, tmp_path: Path,
+        self,
+        monkeypatch: MonkeyPatch,
+        tmp_path: Path,
     ) -> None:
         """Test config loads but validate_config_only is False."""
         config_path = tmp_path / "config.toml"
-        config_path.write_text("""
+        config_path.write_text(
+            """
 [output]
 output = "config_out"
 [optimization]
@@ -251,7 +295,8 @@ create_video = true
 final_only = false
 [hardware]
 device = "cuda"
-""")
+""",
+        )
 
         args = argparse.Namespace(
             content="cat.jpg",
@@ -260,20 +305,27 @@ device = "cuda"
             validate_config_only=False,
         )
 
-        captured = {}
+        captured: dict[str, Any] = {}
+
+        def fake_run(
+            _paths: InputPaths,
+            st_config: StyleTransferConfig,
+        ) -> torch.Tensor:
+            captured["cfg"] = st_config
+            return torch.rand(1)
 
         monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
-        monkeypatch.setattr(
-            stv_main, "style_transfer",
-            lambda **kwargs: captured.update(kwargs) or torch.rand(1),
-        )
+        monkeypatch.setattr(stv_main, "style_transfer", fake_run)
 
         stv_cli.run_from_args(args)
-        assert captured["output_dir"] == "config_out"
-        assert captured["steps"] == 123  # noqa: PLR2004
+        cfg = captured["cfg"]
+        assert cfg.output.output == "config_out"
+        assert cfg.optimization.steps == 123  # noqa: PLR2004
 
     def test_plot_disabled_when_log_loss_set(
-        self, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture,
+        self,
+        monkeypatch: MonkeyPatch,
+        caplog: LogCaptureFixture,
     ) -> None:
         """Test that log_loss disables plot_losses and logs a warning."""
         args = argparse.Namespace(
@@ -291,7 +343,7 @@ device = "cuda"
             init_method=DEFAULT_INIT_METHOD,
             no_normalize=False,
             no_video=False,
-            no_plot=False,  # NOT set, but --log-loss should disable plotting
+            no_plot=False,
             final_only=False,
             quality=DEFAULT_VIDEO_QUALITY,
             seed=DEFAULT_SEED,
@@ -300,19 +352,25 @@ device = "cuda"
             log_every=10,
         )
 
-        captured = {}
-        monkeypatch.setattr(stv_main, "style_transfer",
-                            lambda **kwargs:
-                            captured.update(kwargs) or torch.rand(1))
+        captured: dict[str, Any] = {}
+
+        def fake_run(
+            _paths: InputPaths,
+            st_config: StyleTransferConfig,
+        ) -> torch.Tensor:
+            captured["cfg"] = st_config
+            return torch.rand(1)
+
+        monkeypatch.setattr(stv_main, "style_transfer", fake_run)
         monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
 
         caplog.set_level("WARNING")
         stv_cli.run_from_args(args)
 
-        assert captured["plot_losses"] is False
-        assert (
-            "Loss plotting is disabled because CSV logging is enabled"
-            in caplog.text
+        cfg = captured["cfg"]
+        assert cfg.output.plot_losses is False
+        assert "Loss plotting is disabled because CSV logging is enabled" in (
+            caplog.text
         )
 
 
@@ -328,53 +386,32 @@ class TestLogParameters:
             content="cat.jpg",
             style="s.jpg",
             config="abc.toml",
-            output="out",
-            steps=10,
-            save_every=2,
-            style_w=1.0,
-            content_w=1.0,
-            lr=0.5,
-            style_layers_str="0,5,10",
-            content_layers_str="21",
-            fps=10,
-            init_method="content",
-            no_normalize=False,
-            no_video=False,
-            final_only=False,
-            quality=8,
-            seed=0,
-            device="cpu",
-            plot_losses=True,
         )
+
+        # Minimal but representative cfg for logging
+        cfg = StyleTransferConfig.model_validate({})
+        cfg.output.output = "out"
+        cfg.optimization.steps = 10
+        cfg.video.save_every = 2
+        cfg.optimization.style_w = 1.0
+        cfg.optimization.content_w = 1.0
+        cfg.optimization.lr = 0.5
+        cfg.optimization.style_layers = [0, 5, 10]
+        cfg.optimization.content_layers = [21]
+        cfg.video.fps = 10
+        cfg.optimization.init_method = "content"
+        cfg.optimization.normalize = True
+        cfg.video.create_video = True
+        cfg.output.plot_losses = True
+        cfg.optimization.seed = 0
+
+        paths = InputPaths(content_path=args.content, style_path=args.style)
 
         caplog.set_level("INFO")
-        stv_cli.log_parameters({
-            "content_path": args.content,
-            "style_path": args.style,
-            "output_dir": args.output,
-            "steps": args.steps,
-            "save_every": args.save_every,
-            "style_weight": args.style_w,
-            "content_weight": args.content_w,
-            "learning_rate": args.lr,
-            "style_layers":  [int(x)
-                              for x in args.style_layers_str.split(",")],
-            "content_layers": [int(x)
-                               for x in args.content_layers_str.split(",")],
-            "fps": args.fps,
-            "init_method": args.init_method,
-            "normalize": not args.no_normalize,
-            "create_video": not args.no_video,
-            "final_only": args.final_only,
-            "video_quality": args.quality,
-            "seed": args.seed,
-            "device_name": args.device,
-            "plot_losses": args.plot_losses,
-        }, args)
+        stv_cli.log_parameters(paths, cfg, args)
 
-        assert any(
-            "Loaded config from: abc.toml" in m for m in caplog.messages
-        )
+        assert any("Loaded config from: abc.toml" in m for m in caplog.messages
+                   )
 
     def test_log_parameters_without_config(
         self,
@@ -384,49 +421,14 @@ class TestLogParameters:
         args = argparse.Namespace(
             content="cat.jpg",
             style="s.jpg",
-            output="out",
-            steps=10,
-            save_every=2,
-            style_w=1.0,
-            content_w=1.0,
-            lr=0.5,
-            style_layers_str="0,5,10",
-            content_layers_str="21",
-            fps=10,
-            init_method="content",
-            no_normalize=False,
-            no_video=False,
-            final_only=False,
-            quality=8,
-            seed=0,
-            device="cpu",
-            plot_losses=True,
+            config=None,
         )
 
+        cfg = StyleTransferConfig.model_validate({})
+        paths = InputPaths(content_path=args.content, style_path=args.style)
+
         caplog.set_level("INFO")
-        stv_cli.log_parameters({
-            "content_path": args.content,
-            "style_path": args.style,
-            "output_dir": args.output,
-            "steps": args.steps,
-            "save_every": args.save_every,
-            "style_weight": args.style_w,
-            "content_weight": args.content_w,
-            "learning_rate": args.lr,
-            "style_layers":  [int(x)
-                              for x in args.style_layers_str.split(",")],
-            "content_layers": [int(x)
-                               for x in args.content_layers_str.split(",")],
-            "fps": args.fps,
-            "init_method": args.init_method,
-            "normalize": not args.no_normalize,
-            "create_video": not args.no_video,
-            "final_only": args.final_only,
-            "video_quality": args.quality,
-            "seed": args.seed,
-            "device_name": args.device,
-            "plot_losses": args.plot_losses,
-        }, args)
+        stv_cli.log_parameters(paths, cfg, args)
 
         assert not any("Loaded config from:" in m for m in caplog.messages)
 
@@ -438,48 +440,15 @@ class TestLogParameters:
         args = argparse.Namespace(
             content="cat.jpg",
             style="s.jpg",
-            style_layers="0,5,10",
-            content_layers="21",
             config="abc.toml",
-            output="out",
-            steps=10,
-            save_every=2,
-            style_w=1.0,
-            content_w=1.0,
-            lr=0.5,
-            fps=10,
-            init_method="content",
-            no_normalize=False,
-            no_video=False,
-            final_only=False,
-            quality=8,
-            seed=0,
-            device="cpu",
-            plot_losses=True,
         )
-        params = {
-            "content_path": args.content,
-            "style_path": args.style,
-            "output_dir": args.output,
-            "steps": args.steps,
-            "save_every": args.save_every,
-            "style_weight": args.style_w,
-            "content_weight": args.content_w,
-            "learning_rate": args.lr,
-            "fps": args.fps,
-            "init_method": args.init_method,
-            "normalize": not args.no_normalize,
-            "create_video": not args.no_video,
-            "final_only": args.final_only,
-            "video_quality": args.quality,
-            "seed": args.seed,
-            "device_name": args.device,
-            "style_layers": [0, 5, 10],
-            "content_layers": [21],
-            "plot_losses": args.plot_losses,
-        }
+        cfg = StyleTransferConfig.model_validate({})
+        cfg.optimization.style_layers = [0, 5, 10]
+        cfg.optimization.content_layers = [21]
+        paths = InputPaths(content_path=args.content, style_path=args.style)
+
         caplog.set_level("INFO")
-        stv_cli.log_parameters(params, args)
+        stv_cli.log_parameters(paths, cfg, args)
         assert "Style Layers" in caplog.text
         assert "Content Layers" in caplog.text
 
@@ -506,14 +475,20 @@ class TestLogParameters:
             seed=DEFAULT_SEED,
             device=DEFAULT_DEVICE,
         )
-        captured = {}
-        monkeypatch.setattr(stv_main, "style_transfer",
-                            lambda **kwargs:
-                            captured.update(kwargs) or torch.rand(1))
+        captured: dict[str, Any] = {}
+
+        def fake_run(
+            _paths: InputPaths,
+            st_config: StyleTransferConfig,
+        ) -> torch.Tensor:
+            captured["cfg"] = st_config
+            return torch.rand(1)
+
+        monkeypatch.setattr(stv_main, "style_transfer", fake_run)
         monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
 
         stv_cli.run_from_args(args)
-        assert captured["plot_losses"] is False
+        assert captured["cfg"].output.plot_losses is False
 
 
 class TestCLIMainFlow:
@@ -525,45 +500,15 @@ class TestCLIMainFlow:
             "prog", "--content", "c.jpg", "--style", "s.jpg",
         ])
 
-        called = {}
-        monkeypatch.setattr(stv_cli, "run_from_args",
-            lambda _: called.update({"ran": True}))
+        called: dict[str, bool] = {}
+        monkeypatch.setattr(
+            stv_cli,
+            "run_from_args",
+            lambda _: called.update({"ran": True}),
+        )
 
         stv_cli.main()
         assert called.get("ran") is True
-
-    def test_run_from_args_validate_config_only(
-        self,
-        monkeypatch: MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
-        """
-        Test --validate-config-only mode exits early after validation.
-
-        This test mocks sys.exit to intercept the call and confirm that
-        the config file is validated without executing the pipeline.
-        """
-        config_path = tmp_path / "config.toml"
-        config_path.write_text('[output]\noutput = "test_output"')
-
-        args = argparse.Namespace(
-            config=str(config_path),
-            validate_config_only=True,
-        )
-
-        exit_called = {}
-
-        def fake_exit(code: int = 0) -> None:
-            exit_called["code"] = code
-            raise SystemExit
-
-        monkeypatch.setattr(stv_cli.sys, "exit", fake_exit)
-        monkeypatch.setattr(stv_cli, "log_parameters", lambda _: None)
-
-        with suppress(SystemExit):
-            stv_cli.run_from_args(args)
-
-        assert exit_called["code"] == 0
 
 
 @pytest.mark.integration
@@ -578,7 +523,7 @@ def test_script_main_entry(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(Path(__file__).parent.parent / "src")
 
-    result = subprocess.run(  # noqa: S603 - trusted subprocess call to Python CLI
+    result = subprocess.run(  # noqa: S603 - trusted subprocess call
         [
             sys.executable,
             "-m",
@@ -611,3 +556,13 @@ def test_script_main_entry(tmp_path: Path) -> None:
         f"--- STDERR ---\n{result.stderr}\n"
     )
     assert "Style transfer completed" in result.stdout or result.stderr
+
+
+def test_parse_int_list_with_list() -> None:
+    """Verify parse_int_list returns list unchanged when input is a list."""
+    data = [1, 2, 3]
+    result = stv_cli.parse_int_list(data)
+    assert result == data
+    # Ensure it's the same object type and values
+    assert isinstance(result, list)
+    assert all(isinstance(x, int) for x in result)

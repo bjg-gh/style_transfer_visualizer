@@ -1,5 +1,6 @@
 """Optimization step and loop logic for style transfer."""
 import time
+from dataclasses import dataclass
 
 import imageio
 import torch
@@ -8,48 +9,42 @@ from torch.optim import Optimizer
 from tqdm import tqdm
 
 import style_transfer_visualizer.image_io as stv_image_io
-from style_transfer_visualizer.config_defaults import DEFAULT_LOG_EVERY
+from style_transfer_visualizer.config import StyleTransferConfig
 from style_transfer_visualizer.constants import CSV_LOGGING_RECOMMENDED_STEPS
 from style_transfer_visualizer.logging_utils import logger
 from style_transfer_visualizer.loss_logger import LossCSVLogger
 from style_transfer_visualizer.type_defs import LossHistory
 
 
-def optimization_step(  # noqa: PLR0913
+@dataclass(slots=True)
+class StepContext:
+    """Runtime objects shared across optimization steps."""
+
+    config: StyleTransferConfig
+    progress_bar: tqdm
+    video_writer: imageio.plugins.ffmpeg.FfmpegFormat.Writer | None
+    loss_metrics: LossHistory | None
+    loss_logger: LossCSVLogger | None = None
+
+
+def optimization_step(
     model: nn.Module,
     input_img: torch.Tensor,
     optimizer: Optimizer,
-    style_weight: float,
-    content_weight: float,
-    loss_metrics: LossHistory | None,
     step: int,
-    save_every: int,
-    video_writer: imageio.plugins.ffmpeg.FfmpegFormat.Writer | None,
-    progress_bar: tqdm,
-    *,
-    normalize: bool,
-    loss_logger: LossCSVLogger | None = None) -> float:
-    """
-    Perform a single optimization step.
+    ctx: StepContext,
+) -> float:
+    """One optimization step and optional logging and video frame write."""
+    cfg = ctx.config
+    style_weight = cfg.optimization.style_w
+    content_weight = cfg.optimization.content_w
+    save_every = cfg.video.save_every
+    normalize = cfg.optimization.normalize
+    progress_bar = ctx.progress_bar
+    loss_logger = ctx.loss_logger
+    loss_metrics = ctx.loss_metrics
+    video_writer = ctx.video_writer
 
-    Args:
-        model: The style transfer model
-        input_img: The input image tensor
-        optimizer: The optimizer
-        style_weight: Weight for style loss
-        content_weight: Weight for content loss
-        loss_metrics: Dictionary to track loss metrics
-        step: Current step number
-        save_every: Save frame every N steps
-        video_writer: Video writer object (if video creation is enabled)
-        normalize: Whether to use ImageNet normalization
-        progress_bar: Progress bar object
-        loss_logger: Logger for writing loss metrics to CSV.
-
-    Returns:
-        float: The current loss value
-
-    """
     optimizer.zero_grad()
     style_losses, content_losses = model(input_img)
     style_score = sum(style_losses, start=torch.tensor(0.0))
@@ -96,40 +91,18 @@ def optimization_step(  # noqa: PLR0913
     return loss.item()
 
 
-def run_optimization_loop(  # noqa: PLR0913
+def run_optimization_loop(
     model: nn.Module,
     input_img: torch.Tensor,
     optimizer: Optimizer,
-    steps: int,
-    save_every: int,
-    style_weight: float,
-    content_weight: float,
-    *,
-    normalize: bool,
+    config: StyleTransferConfig,
     video_writer: imageio.plugins.ffmpeg.FfmpegFormat.Writer | None,
-    log_loss_path: str | None = None,
-    log_every: int = DEFAULT_LOG_EVERY,
 ) -> tuple[torch.Tensor, LossHistory, float]:
-    """
-    Run the optimization loop for style transfer.
+    """Run the optimization loop for style transfer."""
+    steps = config.optimization.steps
+    log_loss_path = config.output.log_loss
+    log_every = config.output.log_every
 
-    Args:
-        model: The style transfer model
-        input_img: The input image tensor
-        optimizer: The optimizer
-        steps: Number of optimization steps
-        save_every: Save frame every N steps
-        style_weight: Weight for style loss
-        content_weight: Weight for content loss
-        normalize: Whether to use ImageNet normalization
-        video_writer: Video writer object (if video creation is enabled)
-        log_loss_path: Path to CSV file for logging loss metrics.
-        log_every: Log losses every N steps.
-
-    Returns:
-        (final image tensor, loss metrics dictionary, elapsed time)
-
-    """
     loss_metrics: LossHistory | None = None
     loss_logger: LossCSVLogger | None = None
     if log_loss_path:  # Log loss in csv
@@ -155,14 +128,13 @@ def run_optimization_loop(  # noqa: PLR0913
     step = 0
     progress_bar = tqdm(total=steps, desc="Style Transfer")
     start_time = time.time()
+    ctx = StepContext(config, progress_bar, video_writer, loss_metrics,
+                      loss_logger)
 
     def closure() -> float:
         """Optimization closure for LBFGS."""
         nonlocal step
-        loss = optimization_step(model, input_img, optimizer, style_weight,
-                                 content_weight, loss_metrics, step,
-                                 save_every, video_writer, progress_bar,
-                                 normalize=normalize, loss_logger=loss_logger)
+        loss = optimization_step(model, input_img, optimizer, step, ctx)
         step += 1
         return loss
 

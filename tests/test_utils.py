@@ -17,6 +17,7 @@ import pytest
 import torch
 
 from style_transfer_visualizer import utils as stv_utils
+from style_transfer_visualizer.type_defs import SaveOptions
 
 
 class TestDeviceSetup:
@@ -276,17 +277,21 @@ class TestSaveOutputs:
             "total_loss": [1.5],
         }
 
-        stv_utils.save_outputs(
-            input_img=input_img,
-            loss_metrics=loss_metrics,
-            output_dir=output_dir,
-            elapsed=12.3,
+        opts = SaveOptions(
             content_name="dog",
             style_name="mosaic",
             video_name="timelapse_dog_x_mosaic.mp4",
             normalize=False,
             video_created=True,
             plot_losses=True,
+        )
+
+        stv_utils.save_outputs(
+            input_img=input_img,
+            loss_metrics=loss_metrics,
+            output_dir=output_dir,
+            elapsed=12.3,
+            opts=opts,
         )
 
         final_path = output_dir / "stylized_dog_x_mosaic.png"
@@ -301,17 +306,22 @@ class TestSaveOutputs:
             "content_loss": [0.5],
             "total_loss": [1.5],
         }
+
+        opts = SaveOptions(
+            content_name="cat",
+            style_name="wave",
+            video_name=None,
+            normalize=False,
+            video_created=False,
+            plot_losses=False,
+        )
+
         stv_utils.save_outputs(
-            input_img = input_img,
-            loss_metrics = loss_metrics,
-            output_dir = output_dir,
-            elapsed = 2.5,
-            content_name = "cat",
-            style_name = "wave",
-            video_name = None,
-            normalize = False,
-            video_created = False,
-            plot_losses = False,
+            input_img=input_img,
+            loss_metrics=loss_metrics,
+            output_dir=output_dir,
+            elapsed=2.5,
+            opts=opts,
         )
         final_path = output_dir / "stylized_cat_x_wave.png"
         assert final_path.exists()
@@ -330,16 +340,20 @@ class TestSaveOutputs:
         }
 
         caplog.set_level("INFO")
-        stv_utils.save_outputs(
-            input_img=input_img,
-            loss_metrics=loss_metrics,
-            output_dir=output_dir,
-            elapsed=5.0,
+        opts = SaveOptions(
             content_name="cat",
             style_name="wave",
             video_name="timelapse_cat_x_wave.mp4",
             normalize=False,
             video_created=True,
+            plot_losses=True,
+        )
+        stv_utils.save_outputs(
+            input_img=input_img,
+            loss_metrics=loss_metrics,
+            output_dir=output_dir,
+            elapsed=5.0,
+            opts=opts,
         )
 
         assert "Video saved to:" in caplog.text
@@ -363,16 +377,21 @@ class TestSaveOutputs:
         loss_metrics = {"style_loss": [1.0], "content_loss": [0.5],
                         "total_loss": [1.5]}
 
-        stv_utils.save_outputs(
-            input_img=input_img,
-            loss_metrics=loss_metrics,
-            output_dir=custom_path,
-            elapsed=1.23,
+        opts = SaveOptions(
             content_name="test",
             style_name="coverage",
             video_name="timelapse_test_x_coverage.mp4",
             normalize=False,
             video_created=True,
+            plot_losses=True,
+        )
+
+        stv_utils.save_outputs(
+            input_img=input_img,
+            loss_metrics=loss_metrics,
+            output_dir=custom_path,
+            elapsed=1.23,
+            opts=opts,
         )
 
         assert "Created output directory" in caplog.text
@@ -397,16 +416,21 @@ class TestSaveOutputs:
             "total_loss": [1.5],
         }
 
-        stv_utils.save_outputs(
-            input_img=input_img,
-            loss_metrics=loss_metrics,
-            output_dir=BrokenPath("/bad/path/"),
-            elapsed=1.0,
+        opts = SaveOptions(
             content_name="test",
             style_name="fallback",
             video_name=None,
             normalize=False,
             video_created=False,
+            plot_losses=True,
+        )
+
+        stv_utils.save_outputs(
+            input_img=input_img,
+            loss_metrics=loss_metrics,
+            output_dir=BrokenPath("/bad/path/"),
+            elapsed=1.0,
+            opts=opts,
         )
 
         fallback_img = fallback_path / "stylized_test_x_fallback.png"
