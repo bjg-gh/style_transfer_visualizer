@@ -1,5 +1,45 @@
 # Release Notes
 
+## v1.1.0 — 2025-08-27
+
+**Milestone:** v1.1 Core Refactor
+
+This release represents a major internal refactor to improve
+maintainability, configuration clarity, and developer workflows,
+while preserving full functionality and 100% test coverage.
+
+### Highlights
+- Refactored into a clean CLI package with `cli.py` as entry point
+- Split monolithic script into multiple focused modules (`core_model`,
+  `optimization`, `video`, `image_io`, `utils`, etc.) for clarity and
+  maintainability
+- Introduced typed configuration system (`config.py`) with TOML support
+- Centralized defaults (`config_defaults.py`) and internal constants
+- Added CSV loss logging (`loss_logger.py`) with recommended usage for
+  long runs
+- Strengthened type safety via shared `type_defs.py`
+- Improved reproducibility with unified random seed setup
+- Reorganized optimization loop with optional disk logging to avoid
+  memory bloat
+- Centralized logging utilities (`logging_utils.py`) for consistent
+  output
+- Adopted `uv` for environment and dependency management (replacing
+  requirements.txt/venv)
+- Completed full linting and typing of the codebase (Ruff + Pyright)
+- Streamlined CI with full pre-commit enforcement
+- Maintained 100% pytest coverage across all modules
+
+### Changelog
+- Core: `main.py` orchestration simplified and tested
+- Refactor: replaced single script with modular package structure
+- CLI: new argument groups (output, optimization, video, hardware, config)
+- Config: `StyleTransferConfig` now mirrors TOML schema directly
+- Utils: added stricter input validation and improved error handling
+- Docs: clarified configuration, updated README and workflow docs
+- CI: added pre-commit hooks and typecheck/lint stages
+- Dev: switched to `uv` for dependency resolution and lockfiles
+  (simplifies local setup and CI)
+
 ## v1.0.2 — 2025-05-30
 
 **Milestone:** v1.0.2 Patch Maintenance
