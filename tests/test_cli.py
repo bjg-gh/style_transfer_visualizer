@@ -201,6 +201,8 @@ class TestCLIRunFromArgs:
             quality=7,
             seed=123,
             device="cpu",
+            metadata_title="Title",
+            metadata_artist="Artist",
         )
 
         captured: dict[str, Any] = {}
@@ -225,6 +227,8 @@ class TestCLIRunFromArgs:
         assert cfg.video.fps == 20  # noqa: PLR2004
         assert cfg.video.quality == 7  # noqa: PLR2004
         assert cfg.video.save_every == 10  # noqa: PLR2004
+        assert cfg.video.metadata_title == "Title"
+        assert cfg.video.metadata_artist == "Artist"
         assert cfg.optimization.init_method == "white"
         assert cfg.output.output == "out"
 
