@@ -1,36 +1,60 @@
 # ============================================================================
 # Style Transfer Visualizer Configuration File
 #
-# This file contains configurable settings for running the style transfer
-# visualizer.
-#
-# Save this file as config.toml and use:
-#   python run_visualizer.py --config config.toml
+# Save as config.toml and run with:
+#   uv run style-visualizer --config config.toml
+# Or with uv:
+#   uv run style-visualizer --config config.toml
+# Validate only:
+#   uv run style-visualizer --config config.toml --validate-config-only
 # ============================================================================
+
 [output]
+# Output directory for images and videos
 output = "out"
 
+# Optional CSV loss logging
+# log_loss = "out/loss.csv"
+# Log every N steps when CSV logging is enabled
+# log_every = 10
+# Plot loss curves when CSV logging is disabled
+# plot_losses = true
+
 [optimization]
+# Total optimization steps
 steps = 1500
+# Style and content weights
 style_w = 1000000.0
 content_w = 1.0
+# Optimizer learning rate
 lr = 1.0
-# VGG19 layer indices for computing style loss
-# Common: [0, 5, 10, 19, 28]
+# VGG19 layer indices used for style and content
+# Common choices for style: [0, 5, 10, 19, 28]
 style_layers = [0, 5, 10, 19, 28]
-# VGG19 layer indices for computing content loss
-# Common: [21]
+# Common choice for content: [21]
 content_layers = [21]
+# Initialization method: "random", "white", or "content"
 init_method = "random"
+# Random seed for reproducibility
 seed = 0
+# Enable ImageNet normalization in the model
 normalize = true
 
 [video]
+# Save a frame to the timelapse every N steps
 save_every = 20
+# Frames per second for the timelapse
 fps = 10
+# Video quality in 1..10 where lower is better compression
 quality = 10
+# Enable or disable timelapse creation
 create_video = true
+# If true, only save the final image
 final_only = false
+# Optional MP4 metadata fields
+metadata_title = "Starry Night Transfer"
+metadata_artist = "Vincent Neural Gogh"
 
 [hardware]
+# "cuda" or "cpu"
 device = "cuda"

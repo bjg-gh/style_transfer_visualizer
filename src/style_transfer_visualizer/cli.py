@@ -110,6 +110,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     video.add_argument(
         "--final-only", action="store_true",
         help="Only save final image")
+    video.add_argument(
+        "--metadata-title",
+        type=str,
+        help="Custom title to embed in MP4 metadata",
+        default=argparse.SUPPRESS,
+    )
+    video.add_argument(
+        "--metadata-artist",
+        type=str,
+        help="Custom artist/author to embed in MP4 metadata",
+        default=argparse.SUPPRESS,
+    )
 
     hw = p.add_argument_group("hardware")
     hw.add_argument(
@@ -157,6 +169,9 @@ def log_parameters(
     logger.info("Loss Plotting: %s",
                 "Enabled" if cfg.output.plot_losses else "Disabled")
     logger.info("Random Seed: %d", cfg.optimization.seed)
+    logger.info("Metadata Title: %s", cfg.video.metadata_title or "(default)")
+    logger.info("Metadata Artist: %s",
+                cfg.video.metadata_artist or "(default)")
 
 
 def parse_int_list(s: str | list[int]) -> list[int]:
@@ -230,6 +245,10 @@ def _apply_video_overrides(
         cfg.video.create_video = False
     if getattr(args, "final_only", False):
         cfg.video.final_only = True
+    if hasattr(args, "metadata_title"):
+        cfg.video.metadata_title = args.metadata_title
+    if hasattr(args, "metadata_artist"):
+        cfg.video.metadata_artist = args.metadata_artist
 
 
 def _apply_hardware_overrides(

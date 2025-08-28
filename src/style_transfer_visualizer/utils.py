@@ -4,11 +4,13 @@ Utility functions for common tasks in the style transfer pipeline.
 Includes helpers for device selection, input validation, directory
 management, loss plotting, and other shared operations.
 """
-
+from __future__ import annotations
 
 import random
-from collections.abc import Callable
+import tomllib
+from importlib import metadata as importlib_metadata
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 from torchvision.utils import save_image
@@ -19,7 +21,11 @@ from style_transfer_visualizer.constants import (
     VIDEO_QUALITY_MIN,
 )
 from style_transfer_visualizer.logging_utils import logger
-from style_transfer_visualizer.type_defs import LossHistory, SaveOptions
+
+if TYPE_CHECKING:  # pragma: no cover
+    from collections.abc import Callable
+
+    from style_transfer_visualizer.type_defs import LossHistory, SaveOptions
 
 
 def setup_device(device_name: str) -> torch.device:
@@ -179,3 +185,35 @@ def save_outputs(
     # Log completion information
     logger.info("Style transfer completed in %.2f seconds", elapsed)
     logger.info("Final stylized image saved to: %s", final_path)
+
+
+def resolve_project_version() -> str:
+    """
+    Return the project version with no new runtime deps.
+
+    Strategy:
+    1) Try installed distribution name variants.
+    2) Fallback to reading project.version from a nearby pyproject.toml.
+    3) Fallback to a placeholder string.
+    """
+    for dist_name in ("style-transfer-visualizer",
+                      "style_transfer_visualizer"):
+        try:
+            return importlib_metadata.version(dist_name)
+        except importlib_metadata.PackageNotFoundError:
+            pass
+
+    for parent in Path(__file__).resolve().parents:
+        pyproj = parent / "pyproject.toml"
+        if pyproj.is_file():
+            try:
+                with pyproj.open("rb") as fh:
+                    data = tomllib.load(fh)
+                ver = data.get("project", {}).get("version")
+                if isinstance(ver, str) and ver.strip():
+                    return ver.strip()
+            except OSError as e:
+                logger.warning("Error reading %s: %s", pyproj, e)
+                break
+
+    return "0.0.0"

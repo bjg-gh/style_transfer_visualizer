@@ -9,12 +9,15 @@ import os
 import random
 import shutil
 import sys
-from pathlib import Path as RealPath
+from enum import Enum
+from pathlib import Path, Path as RealPath
 from types import ModuleType
 from typing import cast
 
 import pytest
 import torch
+from _pytest.logging import LogCaptureFixture
+from _pytest.monkeypatch import MonkeyPatch
 
 from style_transfer_visualizer import utils as stv_utils
 from style_transfer_visualizer.type_defs import SaveOptions
@@ -440,3 +443,96 @@ class TestSaveOutputs:
         # Cleanup
         if fallback_path.exists():
             shutil.rmtree(fallback_path)
+
+
+@pytest.fixture
+def fake_dist_missing(monkeypatch: MonkeyPatch) -> None:
+    """Force importlib.metadata.version to raise PackageNotFoundError."""
+    def missing(_name: str) -> None:
+        raise stv_utils.importlib_metadata.PackageNotFoundError
+
+    monkeypatch.setattr(stv_utils.importlib_metadata, "version", missing)
+
+
+@pytest.fixture
+def temp_pkg_root(tmp_path: Path, monkeypatch: MonkeyPatch) -> Path:
+    """Create an isolated package root and point module __file__ to it."""
+    root = tmp_path / "pkgroot"
+    (root / "pkg").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(stv_utils, "__file__", str(root / "pkg" / "utils.py"))
+    return root
+
+
+# ---------------------------------- Tests ------------------------------------
+
+def test_resolve_project_version_from_distribution(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Return distribution version and do not read pyproject."""
+    monkeypatch.setattr(stv_utils.importlib_metadata, "version",
+                        lambda _name: "9.9.9")
+
+    def boom(_fh: object) -> None:
+        msg = "pyproject should not be read"
+        raise RuntimeError(msg)
+
+    # Guard that pyproject is not consulted when distro lookup succeeds
+    monkeypatch.setattr(stv_utils.tomllib, "load", boom)
+
+    assert stv_utils.resolve_project_version() == "9.9.9"
+
+
+class Warn(Enum):
+    """Sentinel for whether a warning is expected in a test case."""
+
+    NO = 0
+    YES = 1
+
+
+@pytest.mark.usefixtures("fake_dist_missing")
+@pytest.mark.parametrize(
+    ("toml_body", "stub_loader", "expected", "expect_warn"),
+    [
+        (
+            "[project]\nname='style-transfer-visualizer'\nversion='1.2.3'\n",
+            None,
+            "1.2.3",
+            Warn.NO,
+        ),
+        (
+            "[project]\nname='style-transfer-visualizer'\n",
+            None,
+            "0.0.0",
+            Warn.NO,
+        ),
+        (
+            "[project]\n",
+            lambda _fh: (_ for _ in ()).throw(OSError("boom")),
+            "0.0.0",
+            Warn.YES,
+        ),
+    ],
+    ids=["has_version", "missing_version", "oserror"],
+)
+def test_resolve_project_version_pyproject_paths(  # noqa: PLR0913
+    temp_pkg_root: Path,
+    toml_body: str,
+    stub_loader: object | None,
+    expected: str,
+    expect_warn: Warn,
+    monkeypatch: MonkeyPatch,
+    caplog: LogCaptureFixture,
+) -> None:
+    """Fallback behavior with present, missing, or unreadable TOML."""
+    pyproj = temp_pkg_root / "pyproject.toml"
+    pyproj.write_text(toml_body, encoding="utf-8")
+
+    if callable(stub_loader):
+        # Force tomllib.load to raise OSError in the oserror case.
+        monkeypatch.setattr(stv_utils.tomllib, "load", stub_loader)  # type: ignore[arg-type]
+
+    with caplog.at_level("WARNING"):
+        assert stv_utils.resolve_project_version() == expected
+
+    if expect_warn is Warn.YES:
+        assert any("Error reading" in r.getMessage() for r in caplog.records)

@@ -62,7 +62,10 @@ Run the tool from the command line:
 ```bash
 uv run style-visualizer --content path/to/content.jpg --style path/to/style.jpg
 ```
-
+Or with a config file:
+```bash
+uv run style-visualizer --config config.toml
+```
 ### Common Options
 
 - `--steps`, `--save-every`, `--style-w`, `--content-w`, `--lr`
@@ -74,7 +77,8 @@ uv run style-visualizer --content path/to/content.jpg --style path/to/style.jpg
 - `--config config.toml`
 - `--log-loss path/to/losses.csv` (log loss metrics to CSV)
 - `--log-every N` (log every N steps, default: 10)
-
+- `--metadata-title "Custom Title"` (override MP4 Title metadata)
+- `--metadata-artist "Custom Artist"` (override MP4 Artist metadata)
 ---
 
 ## Loss Logging Options

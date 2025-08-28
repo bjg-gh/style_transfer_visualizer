@@ -66,6 +66,8 @@ class VideoConfig(BaseModel):
     )
     create_video: bool = DEFAULT_CREATE_VIDEO
     final_only: bool = DEFAULT_FINAL_ONLY
+    metadata_title: str | None = None
+    metadata_artist: str | None = None
 
 
 class HardwareConfig(BaseModel):
