@@ -224,7 +224,7 @@ def test_video_params_passed(  # noqa: PLR0913
     stv_main.style_transfer(paths, cfg)
 
     assert calls
-    fps_seen, quality_seen, _out_path, name_seen = calls[0]
+    fps_seen, quality_seen, _out_path, _name_seen = calls[0]
     assert fps_seen == fps
     assert quality_seen == quality
 

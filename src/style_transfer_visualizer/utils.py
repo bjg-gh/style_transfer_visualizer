@@ -143,6 +143,41 @@ def plot_loss_curves(metrics: LossHistory, output_dir: Path) -> None:
         plt.close(fig)  # Ensure figure is closed to prevent memory leaks
 
 
+def _canonical_stem(p: Path) -> str:
+    """Return a filesystem-friendly stem (spaces to underscores)."""
+    return p.stem.replace(" ", "_")
+
+
+def stylized_image_path_from_names(
+    output_dir: Path,
+    content_name: str,
+    style_name: str,
+) -> Path:
+    """
+    Return the path for the final stylized image given canonical names.
+
+    Matches the filename convention used throughout the project.
+    """
+    return output_dir / f"stylized_{content_name}_x_{style_name}.png"
+
+
+def stylized_image_path_from_paths(
+    output_dir: Path,
+    content_path: Path,
+    style_path: Path,
+) -> Path:
+    """
+    Return the final stylized image path using input file paths.
+
+    Uses the same canonical stem transformation as SaveOptions.
+    """
+    return stylized_image_path_from_names(
+        output_dir=output_dir,
+        content_name=_canonical_stem(content_path),
+        style_name=_canonical_stem(style_path),
+    )
+
+
 def save_outputs(
     input_img: torch.Tensor,
     loss_metrics: LossHistory,
@@ -165,8 +200,10 @@ def save_outputs(
         output_dir = fallback_dir
 
     # Save the final stylized image
-    final_path = (
-        output_dir / f"stylized_{opts.content_name}_x_{opts.style_name}.png"
+    final_path = stylized_image_path_from_names(
+        output_dir=output_dir,
+        content_name=opts.content_name,
+        style_name=opts.style_name,
     )
     img_to_save = stv_image_io.prepare_image_for_output(
         input_img,

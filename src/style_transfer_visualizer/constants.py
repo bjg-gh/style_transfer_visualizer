@@ -4,6 +4,7 @@ Constants used internally by the Style Transfer Visualizer.
 These are implementation-level defaults that should not be overridden
 via config files or CLI arguments.
 """
+from __future__ import annotations
 
 # Standard ImageNet normalization values used in torchvision.models
 # See: https://pytorch.org/vision/stable/models.html#classification
@@ -28,9 +29,15 @@ MAX_DIMENSION = 3000
 # Internal color constants
 COLOR_MODE_RGB = "RGB"
 COLOR_BLACK = (0, 0, 0)
+COLOR_WHITE = (255, 255, 255)
+COLOR_BEIGE = (240, 236, 226)
+COLOR_GREY = (60, 67, 74)
 
 # Shape used for denormalization broadcasting
 DENORM_VIEW_SHAPE = (1, 3, 1, 1)
 
 # Loss logging
 CSV_LOGGING_RECOMMENDED_STEPS = 2000
+
+# Resolution
+RESOLUTION_FULL_HD = (1920, 1080)

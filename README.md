@@ -167,6 +167,9 @@ style_transfer_visualizer/
 │   ├── test_utils.py
 │   ├── test_video.py
 │   └── conftest.py
+├── tools/
+│   └── compare_grid.py            # Standalone helper to build grid or gallery comparison images
+
 ```
 
 ---
@@ -174,3 +177,113 @@ style_transfer_visualizer/
 ## License
 
 MIT License
+
+## Comparison Flags
+
+The command line interface now supports saving comparison images after a run.
+
+**Flags**
+
+* `--compare-inputs` saves a two panel gallery wall that compares Content and Style.
+* `--compare-result` saves a three panel gallery wall that compares Content, Style, and the stylized result. If the expected result image is not found, a warning is logged and the comparison is skipped.
+
+**Examples on Windows**
+
+```bat
+uv run style-visualizer --content C:\img\cat.jpg --style C:\img\wave.jpg --steps 400 --compare-inputs
+```
+
+```bat
+uv run style-visualizer --content C:\img\cat.jpg --style C:\img\wave.jpg --steps 800 --compare-result
+```
+
+Notes
+
+* Output is saved as a PNG inside the directory provided by `--output`.
+* File naming uses canonical stems derived from the content and style file names.
+* For complete control over layout, wall color, and sizing, see the Tools section below.
+
+## Tools
+
+The `tools` directory contains utilities that work with the project image grid and gallery layouts without running the training pipeline.
+
+### tools/compare_grid.py
+
+A standalone runner for building comparison images.
+
+**Modes**
+
+* Grid mode when no layout is provided. This requires a result image and produces a tight three image grid.
+* Gallery mode when a layout is provided. This produces a gallery wall with either two or three framed panels.
+
+**Arguments**
+
+* `--content PATH` path to the content image
+* `--style PATH` path to the style image
+* `--result PATH` path to an existing stylized result image. Required in grid mode. Ignored when layout is gallery two across
+* `--out PATH` output path. If omitted, a default name is derived from inputs. The suffix is normalized to `.png`
+* `--target-height N` grid mode scale height
+* `--target-size WxH` gallery mode canvas size, for example `1920x1080`
+* `--pad N` pixel padding for grid mode
+* `--border-px N` optional border width for grid mode
+* `--layout NAME` gallery layout. One of `gallery-two-across`, `gallery-stacked-left`
+* `--wall #rrggbb` gallery wall color as a hex string, default `#3c434a`
+* `--frame-style NAME` gallery frame tone preset. One of `gold`, `oak`, `black`
+* `--show-labels` draw Content, Style, and Final labels on gallery frames
+
+**Examples on Windows**
+
+Grid mode with three images
+
+```bat
+uv run python tools\compare_grid.py ^
+  --content C:\img\content.jpg ^
+  --style C:\img\style.jpg ^
+  --result C:
+uns\stylized_content_x_style.png ^
+  --target-height 384 ^
+  --pad 8 ^
+  --border-px 2 ^
+  --out C:
+uns\cmp_grid.png
+```
+
+Gallery mode two across for Content and Style
+
+```bat
+uv run python tools\compare_grid.py ^
+  --content C:\img\content.jpg ^
+  --style C:\img\style.jpg ^
+  --layout gallery-two-across ^
+  --wall #112233 ^
+  --target-size 1920x1080 ^
+  --out C:
+uns\gallery_inputs.png
+```
+
+Gallery mode stacked left for Content, Style, and Result
+
+```bat
+uv run python tools\compare_grid.py ^
+  --content C:\img\content.jpg ^
+  --style C:\img\style.jpg ^
+  --result C:
+uns\stylized_content_x_style.png ^
+  --layout gallery-stacked-left ^
+  --frame-style black ^
+  --show-labels ^
+  --out C:
+uns\gallery_result.png
+```
+
+**Behavior**
+
+* If `--out` is omitted, a default name is generated from the content and style file stems.
+* If `--out` does not end with `.png`, it is rewritten to `.png`.
+* In gallery mode with layout gallery two across, any `--result` value is ignored.
+
+## Additional Tools
+
+```
+tools    compare_grid.py    Standalone helper to build grid or gallery comparison images
+```

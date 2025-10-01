@@ -1,3 +1,4 @@
+# tests/test_cli.py
 """
 Tests for the updated CLI parser and execution logic.
 
@@ -9,7 +10,7 @@ Modules tested:
 - run_from_args()
 - main()
 
-Simulates CLI usage with monkeypatching and verifies end-to-end flow.
+Simulates CLI usage with monkeypatching and verifies end to end flow.
 """
 
 from __future__ import annotations
@@ -18,8 +19,9 @@ import argparse
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import pytest
 import torch
@@ -47,6 +49,55 @@ if TYPE_CHECKING:
     from _pytest.logging import LogCaptureFixture
     from _pytest.monkeypatch import MonkeyPatch
 
+
+class SaveGalleryKwargs(TypedDict):
+    """Keyword arguments passed to save_gallery_comparison in tests."""
+
+    content_path: Path
+    style_path: Path
+    result_path: Path | None
+    out_path: Path
+    target_size: tuple[int, int] | None
+    layout: str
+    wall_color: tuple[int, int, int]
+    frame_tone: str
+    show_labels: bool
+
+
+SaveGalleryFn = Callable[..., Path]
+
+
+def make_fake_save_gallery(calls: list[SaveGalleryKwargs]) -> SaveGalleryFn:
+    """Create a stub that records calls and returns the out_path."""
+    def fake_save_gallery_comparison(  # noqa: PLR0913
+        *,
+        content_path: Path,
+        style_path: Path,
+        result_path: Path | None,
+        out_path: Path,
+        target_size: tuple[int, int] | None = None,
+        layout: str = "gallery-stacked-left",
+        wall_color: tuple[int, int, int] = (0, 0, 0),
+        frame_tone: str = "gold",
+        show_labels: bool = True,
+    ) -> Path:
+        """Append call kwargs to the shared list and return out_path."""
+        calls.append(
+            {
+                "content_path": content_path,
+                "style_path": style_path,
+                "result_path": result_path,
+                "out_path": out_path,
+                "target_size": target_size,
+                "layout": layout,
+                "wall_color": wall_color,
+                "frame_tone": frame_tone,
+                "show_labels": show_labels,
+            },
+        )
+        return out_path
+
+    return fake_save_gallery_comparison
 
 
 class TestCLIArgumentParsing:
@@ -112,6 +163,8 @@ class TestCLIArgumentParsing:
             device="cpu",
             style_layers=style_str,
             content_layers=content_str,
+            compare_inputs=False,
+            compare_result=False,
         )
 
         captured: dict[str, Any] = {}
@@ -157,7 +210,7 @@ class TestCLIRunFromArgs:
         monkeypatch: MonkeyPatch,
         tmp_path: Path,
     ) -> None:
-        """Test --validate-config-only short-circuits the run."""
+        """Test --validate-config-only short circuits the run."""
         config_path = tmp_path / "config.toml"
         config_path.write_text("[output]\noutput = 'abc'")
 
@@ -203,6 +256,8 @@ class TestCLIRunFromArgs:
             device="cpu",
             metadata_title="Title",
             metadata_artist="Artist",
+            compare_inputs=False,
+            compare_result=False,
         )
 
         captured: dict[str, Any] = {}
@@ -253,6 +308,8 @@ class TestCLIRunFromArgs:
             quality=DEFAULT_VIDEO_QUALITY,
             seed=DEFAULT_SEED,
             device=DEFAULT_DEVICE,
+            compare_inputs=False,
+            compare_result=False,
         )
 
         captured: dict[str, Any] = {}
@@ -307,6 +364,8 @@ device = "cuda"
             style="s.jpg",
             config=str(config_path),
             validate_config_only=False,
+            compare_inputs=False,
+            compare_result=False,
         )
 
         captured: dict[str, Any] = {}
@@ -354,6 +413,8 @@ device = "cuda"
             device=DEFAULT_DEVICE,
             log_loss="losses.csv",
             log_every=10,
+            compare_inputs=False,
+            compare_result=False,
         )
 
         captured: dict[str, Any] = {}
@@ -377,6 +438,125 @@ device = "cuda"
             caplog.text
         )
 
+    def test_compare_inputs_saves_gallery(
+        self,
+        monkeypatch: MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """The inputs only comparison saves a gallery image."""
+        content = tmp_path / "c.jpg"
+        style = tmp_path / "s.jpg"
+        Image.new("RGB", (32, 24), "red").save(content)
+        Image.new("RGB", (32, 24), "blue").save(style)
+
+        out_dir = tmp_path / "out"
+        out_dir.mkdir()
+
+        args = argparse.Namespace(
+            content=str(content),
+            style=str(style),
+            config=None,
+            validate_config_only=False,
+            output=str(out_dir),
+            steps=1,
+            save_every=1,
+            style_w=1.0,
+            content_w=1.0,
+            lr=0.1,
+            init_method="random",
+            no_normalize=False,
+            no_video=True,
+            final_only=True,
+            quality=10,
+            fps=5,
+            seed=0,
+            device="cpu",
+            compare_inputs=True,
+            compare_result=False,
+        )
+
+        calls: list[SaveGalleryKwargs] = []
+        monkeypatch.setattr(
+            stv_cli,
+            "save_gallery_comparison",
+            make_fake_save_gallery(calls),
+        )
+
+        monkeypatch.setattr(stv_main, "style_transfer", lambda *_: None)
+        monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
+
+        stv_cli.run_from_args(args)
+        assert len(calls) == 1
+        assert calls[0]["result_path"] is None
+        assert calls[0]["layout"] == "gallery-two-across"
+
+    def test_compare_result_missing_then_present(
+        self,
+        monkeypatch: MonkeyPatch,
+        tmp_path: Path,
+        caplog: LogCaptureFixture,
+    ) -> None:
+        """The result comparison warns if missing, then saves when present."""
+        content = tmp_path / "c.jpg"
+        style = tmp_path / "s.jpg"
+        Image.new("RGB", (16, 16), "red").save(content)
+        Image.new("RGB", (16, 16), "blue").save(style)
+
+        out_dir = tmp_path / "out"
+        out_dir.mkdir()
+
+        expected_result_path = out_dir / "expected_result.png"
+
+        args = argparse.Namespace(
+            content=str(content),
+            style=str(style),
+            config=None,
+            validate_config_only=False,
+            output=str(out_dir),
+            steps=1,
+            save_every=1,
+            style_w=1.0,
+            content_w=1.0,
+            lr=0.1,
+            init_method="random",
+            no_normalize=False,
+            no_video=True,
+            final_only=True,
+            quality=10,
+            fps=5,
+            seed=0,
+            device="cpu",
+            compare_inputs=False,
+            compare_result=True,
+        )
+
+        calls: list[SaveGalleryKwargs] = []
+        monkeypatch.setattr(
+            stv_cli,
+            "save_gallery_comparison",
+            make_fake_save_gallery(calls),
+        )
+
+        monkeypatch.setattr(stv_main, "style_transfer", lambda *_: None)
+        monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
+        monkeypatch.setattr(
+            stv_cli,
+            "stylized_image_path_from_paths",
+            lambda *_: expected_result_path,
+        )
+
+        caplog.set_level("WARNING")
+        stv_cli.run_from_args(args)
+        assert "Expected stylized result missing" in caplog.text
+        assert len(calls) == 0
+
+        caplog.clear()
+        Image.new("RGB", (16, 16), "green").save(expected_result_path)
+        stv_cli.run_from_args(args)
+        assert len(calls) == 1
+        assert calls[0]["result_path"] == expected_result_path
+        assert calls[0]["layout"] == "gallery-stacked-left"
+
 
 class TestLogParameters:
     """Tests parameter logging output for CLI execution."""
@@ -392,7 +572,6 @@ class TestLogParameters:
             config="abc.toml",
         )
 
-        # Minimal but representative cfg for logging
         cfg = StyleTransferConfig.model_validate({})
         cfg.output.output = "out"
         cfg.optimization.steps = 10
@@ -414,8 +593,8 @@ class TestLogParameters:
         caplog.set_level("INFO")
         stv_cli.log_parameters(paths, cfg, args)
 
-        assert any("Loaded config from: abc.toml" in m for m in caplog.messages
-                   )
+        assert any("Loaded config from: abc.toml"
+                   in m for m in caplog.messages)
 
     def test_log_parameters_without_config(
         self,
@@ -478,6 +657,8 @@ class TestLogParameters:
             quality=DEFAULT_VIDEO_QUALITY,
             seed=DEFAULT_SEED,
             device=DEFAULT_DEVICE,
+            compare_inputs=False,
+            compare_result=False,
         )
         captured: dict[str, Any] = {}
 
@@ -527,7 +708,7 @@ def test_script_main_entry(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(Path(__file__).parent.parent / "src")
 
-    result = subprocess.run(  # noqa: S603 - trusted subprocess call
+    result = subprocess.run(  # noqa: S603
         [
             sys.executable,
             "-m",
@@ -567,6 +748,5 @@ def test_parse_int_list_with_list() -> None:
     data = [1, 2, 3]
     result = stv_cli.parse_int_list(data)
     assert result == data
-    # Ensure it's the same object type and values
     assert isinstance(result, list)
     assert all(isinstance(x, int) for x in result)

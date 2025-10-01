@@ -4,15 +4,23 @@ import argparse
 import sys
 from pathlib import Path
 
+from PIL import Image
+
 import style_transfer_visualizer.config as stv_config
 import style_transfer_visualizer.main as stv_main
 from style_transfer_visualizer.config_defaults import DEFAULT_LOG_EVERY
 from style_transfer_visualizer.constants import (
+    COLOR_GREY,
     VIDEO_QUALITY_MAX,
     VIDEO_QUALITY_MIN,
 )
+from style_transfer_visualizer.image_grid import (
+    default_comparison_name,
+    save_gallery_comparison,
+)
 from style_transfer_visualizer.logging_utils import logger
-from style_transfer_visualizer.type_defs import InputPaths
+from style_transfer_visualizer.type_defs import InputPaths, LayoutName
+from style_transfer_visualizer.utils import stylized_image_path_from_paths
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -60,6 +68,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help=(
             "Log losses to CSV every N steps (default: "
             f"{DEFAULT_LOG_EVERY}). Ignored if --log-loss is not set."
+        ),
+    )
+    output.add_argument(
+        "--compare-inputs",
+        action="store_true",
+        help=(
+            "Save a labeled comparison image of content and style to the "
+            "output directory and exit."
+        ),
+    )
+    output.add_argument(
+        "--compare-result",
+        action="store_true",
+        help=(
+            "Save a labeled comparison image of content, style, and result to "
+            "the output directory and exit. Requires --result to point to the "
+            "stylized image file."
         ),
     )
 
@@ -260,6 +285,69 @@ def _apply_hardware_overrides(
         cfg.hardware.device = args.device
 
 
+def _comparison_out_path(
+    out_dir: str,
+    content_p: Path,
+    style_p: Path,
+    *,
+    include_result: bool,
+) -> Path:
+    """
+    Build the deterministic comparison image path under out_dir.
+
+    The inputs-only variant uses the standard comparison name.
+    The result variant appends '_final' before the suffix.
+    """
+    base = default_comparison_name(content_p, style_p, Path(out_dir))
+    if include_result:
+        return base.parent / f"{base.stem}_final{base.suffix}"
+    return base
+
+
+def _save_comparison_image(
+    content_path: str,
+    style_path: str,
+    out_dir: str,
+    *,
+    include_result: bool,
+    result_path: str | None,
+) -> Path:
+    """
+    Render and save the gallery-wall comparison image under out_dir.
+
+    Labels are always enabled, frame tone is gold, wall uses default
+    project color, and target canvas equals the content image size.
+    """
+    content_p = Path(content_path)
+    style_p = Path(style_path)
+    result_p = Path(result_path) if include_result and result_path else None
+
+    # Canvas equals content size.
+    with Image.open(content_p) as im:
+        target_size = im.size
+
+    layout: LayoutName = (
+        "gallery-stacked-left" if include_result else "gallery-two-across"
+    )
+    out_path = _comparison_out_path(
+        out_dir, content_p, style_p, include_result=include_result,
+    )
+
+    out_path = save_gallery_comparison(
+        content_path=content_p,
+        style_path=style_p,
+        result_path=result_p,
+        out_path=out_path,
+        target_size=target_size,
+        layout=layout,
+        wall_color=COLOR_GREY,
+        frame_tone="gold",
+        show_labels=True,
+    )
+    logger.info("Saved comparison image: %s", out_path)
+    return out_path
+
+
 def _enforce_csv_plot_rule(cfg: stv_config.StyleTransferConfig) -> None:
     """Disable plotting when CSV logging is enabled, with a warning."""
     if getattr(cfg.output, "log_loss", None) and cfg.output.plot_losses:
@@ -292,6 +380,44 @@ def run_from_args(args: argparse.Namespace) -> None:
     log_parameters(paths, cfg, args)
 
     stv_main.style_transfer(paths, cfg)
+
+    # Optionally write comparison images.
+    if args.compare_inputs or args.compare_result:
+        out_dir = cfg.output.output
+        content_p = Path(args.content)
+        style_p = Path(args.style)
+
+        # inputs-only comparison
+        if args.compare_inputs:
+            _save_comparison_image(
+                content_path=str(content_p),
+                style_path=str(style_p),
+                out_dir=out_dir,
+                include_result=False,
+                result_path=None,
+            )
+
+        # content+style+result comparison
+        if args.compare_result:
+            result_p = stylized_image_path_from_paths(
+                Path(out_dir),
+                content_p,
+                style_p,
+            )
+            if not result_p.exists():
+                logger.warning(
+                    "Expected stylized result missing: %s. "
+                    "Skipping content+style+result comparison.",
+                    result_p,
+                )
+            else:
+                _save_comparison_image(
+                    content_path=str(content_p),
+                    style_path=str(style_p),
+                    out_dir=out_dir,
+                    include_result=True,
+                    result_path=str(result_p),
+                )
 
 
 def main() -> None:
