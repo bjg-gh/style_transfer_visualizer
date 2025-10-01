@@ -274,7 +274,7 @@ class TestOptimization:
             "output": {"log_loss": "losses.csv", "log_every": 1},
         })
 
-        result_img, metrics, elapsed = stv_optimization.run_optimization_loop(
+        _img, metrics, _elapsed = stv_optimization.run_optimization_loop(
             model, input_img, optimizer, config=config, video_writer=None,
         )
 
@@ -299,7 +299,7 @@ class TestOptimization:
             "video": {"save_every": 1},
         })
 
-        result_img, metrics, elapsed = stv_optimization.run_optimization_loop(
+        _img, metrics, _elapsed = stv_optimization.run_optimization_loop(
             model, input_img, optimizer, config=config, video_writer=None,
         )
 
@@ -331,7 +331,7 @@ class TestOptimization:
         })
 
         # Run optimization loop with CSV logging (will fail to init)
-        result_img, metrics, elapsed = stv_optimization.run_optimization_loop(
+        _img, metrics, _elapsed = stv_optimization.run_optimization_loop(
             model, input_img, optimizer, config=config, video_writer=None,
         )
 

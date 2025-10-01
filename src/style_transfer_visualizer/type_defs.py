@@ -3,14 +3,18 @@ Defines shared type aliases for the style transfer visualizer.
 
 Centralizes reusable type hints to improve consistency and readability.
 """
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Literal
 
 import torch
 
 InitMethod = Literal["content", "random", "white"]
-TensorList = list[torch.Tensor]
+LayoutName = Literal["gallery-stacked-left", "gallery-two-across"]
 LossHistory = dict[str, list[float]]
+TensorList = list[torch.Tensor]
+
 
 @dataclass(slots=True)
 class InputPaths:

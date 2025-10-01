@@ -53,7 +53,7 @@ class TestInitializeInput:
 
     def test_invalid_input_type(self) -> None:
         """Test non-tensor input raises TypeError."""
-        with pytest.raises(TypeError, match="Expected content_img.*Tensor"):
+        with pytest.raises(TypeError, match=r"Expected content_img.*Tensor"):
             stv_core_model.initialize_input(
                 cast("torch.Tensor", "not_a_tensor"),
                 "content",

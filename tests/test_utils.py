@@ -536,3 +536,27 @@ def test_resolve_project_version_pyproject_paths(  # noqa: PLR0913
 
     if expect_warn is Warn.YES:
         assert any("Error reading" in r.getMessage() for r in caplog.records)
+
+
+def test_canonical_stem_spaces_to_underscores() -> None:
+    """_canonical_stem replaces spaces with underscores."""
+    p = RealPath("my content image.png")
+    # Accessing a private helper is acceptable here for coverage.
+    assert stv_utils._canonical_stem(p) == "my_content_image"  # noqa: SLF001
+
+
+def test_stylized_image_path_from_paths_uses_canonical(
+    tmp_path: RealPath,
+) -> None:
+    """Path builder uses canonical stems from input file paths."""
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+
+    content = tmp_path / "my content.png"
+    style = tmp_path / "style pic.jpg"
+    # Files need not exist for this helper, but creating keeps tests realistic.
+    content.write_bytes(b"")
+    style.write_bytes(b"")
+
+    out = stv_utils.stylized_image_path_from_paths(out_dir, content, style)
+    assert out == out_dir / "stylized_my_content_x_style_pic.png"
