@@ -56,17 +56,36 @@ def style_transfer(
 
     # Prepare output paths
     output_path = stv_utils.setup_output_directory(config.output.output)
-    content_name = Path(paths.content_path).stem
-    style_name = Path(paths.style_path).stem
+    content_path = Path(paths.content_path)
+    style_path = Path(paths.style_path)
+    content_name = content_path.stem
+    style_name = style_path.stem
     video_name = f"timelapse_{content_name}_x_{style_name}.mp4"
 
     # Initialize video writer (if needed)
     video_writer = stv_video.setup_video_writer(config.video, output_path,
                                                 video_name)
+    intro_last_frame = None
+    intro_crossfade_frames = 0
+    if video_writer:
+        intro_info = stv_video.prepare_intro_segment(
+            config.video,
+            video_writer,
+            content_path,
+            style_path,
+        )
+        if intro_info is not None:
+            intro_last_frame, intro_crossfade_frames = intro_info
 
     # Run optimization
     input_img, loss_metrics, elapsed = stv_optimizer.run_optimization_loop(
-        model, input_img, optimizer, config, video_writer,
+        model,
+        input_img,
+        optimizer,
+        config,
+        video_writer,
+        intro_last_frame=intro_last_frame,
+        intro_crossfade_frames=intro_crossfade_frames,
     )
 
     # Clean up and save outputs

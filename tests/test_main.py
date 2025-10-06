@@ -13,6 +13,7 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import numpy as np
 import pytest
 import torch
 
@@ -227,6 +228,222 @@ def test_video_params_passed(  # noqa: PLR0913
     fps_seen, quality_seen, _out_path, _name_seen = calls[0]
     assert fps_seen == fps
     assert quality_seen == quality
+
+
+def test_style_transfer_passes_intro_info(
+    test_dir: str,
+    content_image: str,
+    style_image: str,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Intro metadata flows from prepare_intro_segment into optimization."""
+    output_dir = setup_test_directory(test_dir, "intro_info")
+    dummy_tensor = torch.rand(1, 3, 64, 64)
+
+    monkeypatch.setattr(
+        stv_utils,
+        "validate_input_paths",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        stv_utils,
+        "validate_parameters",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        stv_utils,
+        "setup_random_seed",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        stv_utils,
+        "setup_device",
+        lambda *_a, **_k: torch.device("cpu"),
+    )
+    monkeypatch.setattr(
+        stv_utils,
+        "setup_output_directory",
+        lambda _p: Path(output_dir),
+    )
+    monkeypatch.setattr(
+        stv_utils,
+        "save_outputs",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        stv_image_io,
+        "load_image_to_tensor",
+        lambda *_a, **_k: dummy_tensor,
+    )
+    monkeypatch.setattr(
+        stv_core_model,
+        "prepare_model_and_input",
+        lambda *_a, **_k: ("model", dummy_tensor.clone(), "optimizer"),
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_run(
+        _model: object,
+        input_img: torch.Tensor,
+        _optimizer: object,
+        _config: StyleTransferConfig,
+        video_writer: object,
+        *,
+        intro_last_frame: np.ndarray | None,
+        intro_crossfade_frames: int,
+    ) -> tuple[torch.Tensor, dict[str, list[float]], float]:
+        captured["writer"] = video_writer
+        captured["intro_last_frame"] = intro_last_frame
+        captured["intro_crossfade_frames"] = intro_crossfade_frames
+        return input_img, {"loss": []}, 0.0
+
+    monkeypatch.setattr(stv_optimization, "run_optimization_loop", fake_run)
+
+    class StubWriter:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    writer_instance = StubWriter()
+    monkeypatch.setattr(
+        stv_video,
+        "setup_video_writer",
+        lambda *_a, **_k: writer_instance,
+    )
+    monkeypatch.setattr(
+        stv_video,
+        "prepare_intro_segment",
+        lambda *_a, **_k: (np.zeros((64, 64, 3), dtype=np.uint8), 5),
+    )
+
+    paths = InputPaths(content_path=content_image, style_path=style_image)
+    cfg = _base_config()
+    cfg.optimization.steps = 1
+    cfg.video.create_video = True
+    cfg.video.save_every = 1
+    cfg.output.output = output_dir
+    expected_crossfade = round(
+        cfg.video.fps * stv_video.INTRO_CROSSFADE_SECONDS,
+    )
+
+    result = stv_main.style_transfer(paths, cfg)
+
+    assert isinstance(result, torch.Tensor)
+    assert isinstance(captured["writer"], StubWriter)
+    assert captured["intro_crossfade_frames"] == expected_crossfade
+    intro_frame = captured["intro_last_frame"]
+    assert isinstance(intro_frame, np.ndarray)
+    assert intro_frame.shape == (64, 64, 3)
+    assert writer_instance.closed is True
+
+
+def test_style_transfer_handles_missing_intro_segment(
+    test_dir: str,
+    content_image: str,
+    style_image: str,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """When intro is skipped we pass default metadata into optimization."""
+    output_dir = setup_test_directory(test_dir, "intro_none")
+    dummy_tensor = torch.rand(1, 3, 64, 64)
+
+    monkeypatch.setattr(
+        stv_utils,
+        "validate_input_paths",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        stv_utils,
+        "validate_parameters",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        stv_utils,
+        "setup_random_seed",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        stv_utils,
+        "setup_device",
+        lambda *_a, **_k: torch.device("cpu"),
+    )
+    monkeypatch.setattr(
+        stv_utils,
+        "setup_output_directory",
+        lambda _p: Path(output_dir),
+    )
+    monkeypatch.setattr(
+        stv_utils,
+        "save_outputs",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        stv_image_io,
+        "load_image_to_tensor",
+        lambda *_a, **_k: dummy_tensor,
+    )
+    monkeypatch.setattr(
+        stv_core_model,
+        "prepare_model_and_input",
+        lambda *_a, **_k: ("model", dummy_tensor.clone(), "optimizer"),
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_run(
+        _model: object,
+        input_img: torch.Tensor,
+        _optimizer: object,
+        _config: StyleTransferConfig,
+        video_writer: object,
+        *,
+        intro_last_frame: np.ndarray | None,
+        intro_crossfade_frames: int,
+    ) -> tuple[torch.Tensor, dict[str, list[float]], float]:
+        captured["writer"] = video_writer
+        captured["intro_last_frame"] = intro_last_frame
+        captured["intro_crossfade_frames"] = intro_crossfade_frames
+        return input_img, {"loss": []}, 0.0
+
+    monkeypatch.setattr(stv_optimization, "run_optimization_loop", fake_run)
+
+    class StubWriter:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    writer_instance = StubWriter()
+    monkeypatch.setattr(
+        stv_video,
+        "setup_video_writer",
+        lambda *_a, **_k: writer_instance,
+    )
+    monkeypatch.setattr(
+        stv_video,
+        "prepare_intro_segment",
+        lambda *_a, **_k: None,
+    )
+
+    paths = InputPaths(content_path=content_image, style_path=style_image)
+    cfg = _base_config()
+    cfg.optimization.steps = 1
+    cfg.video.create_video = True
+    cfg.video.save_every = 1
+    cfg.output.output = output_dir
+    expected_crossfade = 0
+
+    result = stv_main.style_transfer(paths, cfg)
+
+    assert isinstance(result, torch.Tensor)
+    assert isinstance(captured["writer"], StubWriter)
+    assert captured["intro_last_frame"] is None
+    assert captured["intro_crossfade_frames"] == expected_crossfade
+    assert writer_instance.closed is True
 
 
 def test_final_only_disables_video(

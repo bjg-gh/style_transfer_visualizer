@@ -13,8 +13,8 @@ DEFAULT_NORMALIZE = True
 # See:
 # https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py
 # https://medium.com/@ferlatti.aldo/neural-style-transfer-nst-theory-and-implementation-c26728cf969d
-DEFAULT_STYLE_LAYERS = [0, 5, 10, 19, 28]
-DEFAULT_CONTENT_LAYERS = [21]
+DEFAULT_STYLE_LAYERS: tuple[int, ...] = (0, 5, 10, 19, 28)
+DEFAULT_CONTENT_LAYERS: tuple[int, ...] = (21,)
 
 # Video
 DEFAULT_SAVE_EVERY = 20
@@ -22,6 +22,8 @@ DEFAULT_FPS = 10
 DEFAULT_VIDEO_QUALITY = 10
 DEFAULT_CREATE_VIDEO = True
 DEFAULT_FINAL_ONLY = False
+DEFAULT_VIDEO_INTRO_ENABLED = True
+DEFAULT_VIDEO_INTRO_DURATION = 10.0
 
 # Hardware
 DEFAULT_DEVICE = "cuda"

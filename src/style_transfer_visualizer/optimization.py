@@ -3,12 +3,14 @@ import time
 from dataclasses import dataclass
 
 import imageio
+import numpy as np
 import torch
 from torch import nn
 from torch.optim import Optimizer
 from tqdm import tqdm
 
 import style_transfer_visualizer.image_io as stv_image_io
+import style_transfer_visualizer.video as stv_video
 from style_transfer_visualizer.config import StyleTransferConfig
 from style_transfer_visualizer.constants import CSV_LOGGING_RECOMMENDED_STEPS
 from style_transfer_visualizer.logging_utils import logger
@@ -25,13 +27,17 @@ class StepContext:
     video_writer: imageio.plugins.ffmpeg.FfmpegFormat.Writer | None
     loss_metrics: LossHistory | None
     loss_logger: LossCSVLogger | None = None
+    last_loss: float | None = None
+    intro_last_frame: np.ndarray | None = None
+    intro_crossfade_frames: int = 0
+    intro_transition_done: bool = False
 
 
 def optimization_step(
     model: nn.Module,
     input_img: torch.Tensor,
     optimizer: Optimizer,
-    step: int,
+    step_idx: int,
     ctx: StepContext,
 ) -> float:
     """One optimization step and optional logging and video frame write."""
@@ -47,39 +53,77 @@ def optimization_step(
 
     optimizer.zero_grad()
     style_losses, content_losses = model(input_img)
-    style_score = sum(style_losses, start=torch.tensor(0.0))
-    content_score = sum(content_losses, start=torch.tensor(0.0))
+
+    device = input_img.device
+    dtype = input_img.dtype
+    zero = torch.zeros((), device=device, dtype=dtype)
+    style_score = (
+        torch.stack(style_losses).sum()
+        if style_losses
+        else zero
+    )
+    content_score = (
+        torch.stack(content_losses).sum()
+        if content_losses
+        else zero
+    )
+
     loss = style_weight * style_score + content_weight * content_score
     loss.backward()
 
     if not torch.isfinite(style_score):
-        logger.warning("Non-finite style score at step %d", step)
+        logger.warning("Non-finite style score at step %d", step_idx)
     if not torch.isfinite(content_score):
-        logger.warning("Non-finite content score at step %d", step)
+        logger.warning("Non-finite content score at step %d", step_idx)
     if not torch.isfinite(loss):
         logger.warning(
-            "Non-finite total loss at step %d, using previous loss", step)
+            "Non-finite total loss at step %d, using previous loss",
+            step_idx,
+        )
 
-    logger.debug("Step %d: Style %s, Content %.4e, Total %.4e",
-                 step, [s.item() for s in style_losses], content_score.item(),
-                 loss.item())
+    logger.debug(
+        "Step %d: Style %s, Content %.4e, Total %.4e",
+        step_idx,
+        [s.item() for s in style_losses],
+        content_score.item(),
+        loss.item(),
+    )
 
-    if loss_metrics:  # In-memory loss tracking
+    if loss_metrics is not None:
         loss_metrics["style_loss"].append(style_score.item())
         loss_metrics["content_loss"].append(content_score.item())
         loss_metrics["total_loss"].append(loss.item())
 
-    if loss_logger:
-        loss_logger.log(step, style_score.item(), content_score.item(),
-                        loss.item())
+    if loss_logger is not None:
+        loss_logger.log(
+            step_idx,
+            style_score.item(),
+            content_score.item(),
+            loss.item(),
+        )
 
-    if step % save_every == 0:
+    if save_every and step_idx % save_every == 0:
         with torch.no_grad():
-            img = stv_image_io.prepare_image_for_output(input_img,
-                                                        normalize=normalize)
-            if img is not None and video_writer is not None:
-                img_np = (img.squeeze(0).permute(1, 2, 0).cpu().numpy()
-                          * 255).astype("uint8")
+            img = stv_image_io.prepare_image_for_output(
+                input_img,
+                normalize=normalize,
+            )
+            if video_writer is not None and img is not None:
+                img_np = (
+                    img.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255
+                ).astype("uint8")
+                if (
+                    ctx.intro_last_frame is not None
+                    and not ctx.intro_transition_done
+                ):
+                    stv_video.append_crossfade(
+                        video_writer,
+                        ctx.intro_last_frame,
+                        img_np,
+                        ctx.intro_crossfade_frames,
+                    )
+                    ctx.intro_transition_done = True
+                    ctx.intro_last_frame = None
                 video_writer.append_data(img_np)
         progress_bar.set_postfix({
             "style": f"{style_score.item():.4f}",
@@ -87,16 +131,21 @@ def optimization_step(
             "loss": f"{loss.item():.4f}",
         })
 
+    loss_value = loss.item()
+    ctx.last_loss = loss_value
     progress_bar.update(1)
-    return loss.item()
+    return loss_value
 
 
-def run_optimization_loop(
+def run_optimization_loop(  # noqa: PLR0913
     model: nn.Module,
     input_img: torch.Tensor,
     optimizer: Optimizer,
     config: StyleTransferConfig,
     video_writer: imageio.plugins.ffmpeg.FfmpegFormat.Writer | None,
+    *,
+    intro_last_frame: np.ndarray | None = None,
+    intro_crossfade_frames: int = 0,
 ) -> tuple[torch.Tensor, LossHistory, float]:
     """Run the optimization loop for style transfer."""
     steps = config.optimization.steps
@@ -128,13 +177,24 @@ def run_optimization_loop(
     step = 0
     progress_bar = tqdm(total=steps, desc="Style Transfer")
     start_time = time.time()
-    ctx = StepContext(config, progress_bar, video_writer, loss_metrics,
-                      loss_logger)
+    ctx = StepContext(
+        config,
+        progress_bar,
+        video_writer,
+        loss_metrics,
+        loss_logger,
+        intro_last_frame=intro_last_frame,
+        intro_crossfade_frames=intro_crossfade_frames,
+    )
 
     def closure() -> float:
         """Optimization closure for LBFGS."""
         nonlocal step
-        loss = optimization_step(model, input_img, optimizer, step, ctx)
+        if step >= steps:
+            last = ctx.last_loss
+            return 0.0 if last is None else last
+        step_idx = step + 1
+        loss = optimization_step(model, input_img, optimizer, step_idx, ctx)
         step += 1
         return loss
 

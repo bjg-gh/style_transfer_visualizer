@@ -8,7 +8,10 @@ from PIL import Image
 
 import style_transfer_visualizer.config as stv_config
 import style_transfer_visualizer.main as stv_main
-from style_transfer_visualizer.config_defaults import DEFAULT_LOG_EVERY
+from style_transfer_visualizer.config_defaults import (
+    DEFAULT_LOG_EVERY,
+    DEFAULT_VIDEO_INTRO_DURATION,
+)
 from style_transfer_visualizer.constants import (
     COLOR_GREY,
     VIDEO_QUALITY_MAX,
@@ -53,8 +56,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     output.add_argument(
         "--output", type=str, help="Output directory",
         default=argparse.SUPPRESS)
-    output.add_argument("--no-plot", action="store_true",
-                        help = "Disable loss plotting")
+    output.add_argument(
+        "--no-plot",
+        action="store_true",
+        help="Disable loss plotting",
+    )
     output.add_argument(
         "--log-loss", type=str,
         help=(
@@ -83,8 +89,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Save a labeled comparison image of content, style, and result to "
-            "the output directory and exit. Requires --result to point to the "
-            "stylized image file."
+            "the output directory and exit. The stylized image path is "
+            "derived from the input filenames."
         ),
     )
 
@@ -135,6 +141,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
     video.add_argument(
         "--final-only", action="store_true",
         help="Only save final image")
+    video.add_argument(
+        "--no-intro",
+        action="store_true",
+        help="Disable the intro comparison segment in the video",
+    )
+    video.add_argument(
+        "--intro-duration",
+        type=float,
+        help=(
+            "Seconds to display the intro comparison frame before the "
+            "stylization timelapse (default: "
+            f"{DEFAULT_VIDEO_INTRO_DURATION})"
+        ),
+        default=argparse.SUPPRESS,
+    )
     video.add_argument(
         "--metadata-title",
         type=str,
@@ -191,6 +212,9 @@ def log_parameters(
                 "Enabled" if cfg.optimization.normalize else "Disabled")
     logger.info("Video Creation: %s",
                 "Enabled" if cfg.video.create_video else "Disabled")
+    logger.info("Video Intro: %s",
+                "Enabled" if cfg.video.intro_enabled else "Disabled")
+    logger.info("Intro Duration (s): %.2f", cfg.video.intro_duration_seconds)
     logger.info("Loss Plotting: %s",
                 "Enabled" if cfg.output.plot_losses else "Disabled")
     logger.info("Random Seed: %d", cfg.optimization.seed)
@@ -270,6 +294,10 @@ def _apply_video_overrides(
         cfg.video.create_video = False
     if getattr(args, "final_only", False):
         cfg.video.final_only = True
+    if getattr(args, "no_intro", False):
+        cfg.video.intro_enabled = False
+    if hasattr(args, "intro_duration"):
+        cfg.video.intro_duration_seconds = max(args.intro_duration, 0.0)
     if hasattr(args, "metadata_title"):
         cfg.video.metadata_title = args.metadata_title
     if hasattr(args, "metadata_artist"):
@@ -431,5 +459,5 @@ def main() -> None:
     run_from_args(args)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()
