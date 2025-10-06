@@ -9,6 +9,7 @@ Covers:
 """
 import logging
 
+import numpy as np
 import pytest
 import torch
 from _pytest.logging import LogCaptureFixture
@@ -19,6 +20,7 @@ from torch.optim import Optimizer
 import style_transfer_visualizer.core_model as stv_core_model
 import style_transfer_visualizer.image_io as stv_image_io
 import style_transfer_visualizer.optimization as stv_optimization
+import style_transfer_visualizer.video as stv_video
 from style_transfer_visualizer.config import StyleTransferConfig
 
 
@@ -105,7 +107,7 @@ class TestOptimization:
                                                "total_loss": [],
                                            }, loss_logger=None)
         loss = stv_optimization.optimization_step(
-            model, input_img, optimizer, step=0, ctx=ctx,
+            model, input_img, optimizer, step_idx=1, ctx=ctx,
         )
         assert isinstance(loss, float)
         assert len(ctx.loss_metrics["total_loss"]) == 1  # type: ignore[index]
@@ -132,7 +134,7 @@ class TestOptimization:
         })
 
         stv_optimization.optimization_step(
-            model, input_img, optimizer, step=10, ctx=ctx,
+            model, input_img, optimizer, step_idx=10, ctx=ctx,
         )
         assert video.append_data.called
 
@@ -163,7 +165,7 @@ class TestOptimization:
         })
 
         stv_optimization.optimization_step(
-            model, input_img, opt, step=0, ctx=ctx,
+            model, input_img, opt, step_idx=1, ctx=ctx,
         )
 
         assert "Non-finite" in caplog.text
@@ -192,7 +194,7 @@ class TestOptimization:
         })
 
         stv_optimization.optimization_step(
-            model, input_img, optimizer, step=10, ctx=ctx,
+            model, input_img, optimizer, step_idx=10, ctx=ctx,
         )
 
         patch.assert_called_once()
@@ -224,7 +226,7 @@ class TestOptimization:
                                            )
 
         stv_optimization.optimization_step(
-            model, input_img, optimizer, step=10, ctx=ctx,
+            model, input_img, optimizer, step_idx=10, ctx=ctx,
         )
 
         video_writer.append_data.assert_not_called()
@@ -306,6 +308,69 @@ class TestOptimization:
         assert isinstance(metrics, dict)
         assert "style_loss" in metrics
         assert len(metrics["style_loss"]) > 0
+
+    def test_run_optimization_loop_triggers_intro_crossfade(
+        self,
+        setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
+        mocker: MockerFixture,
+    ) -> None:
+        """Ensure intro crossfade is invoked before the first saved frame."""
+        model, _, _, input_img = setup_model_and_images
+        optimizer = torch.optim.Adam([input_img])
+
+        config = StyleTransferConfig.model_validate({
+            "optimization": {
+                "steps": 1,
+                "style_w": 1.0,
+                "content_w": 1.0,
+                "normalize": True,
+            },
+            "video": {"save_every": 1},
+        })
+
+        class MemoryWriter:
+            def __init__(self) -> None:
+                self.frames: list[np.ndarray] = []
+
+            def append_data(self, frame: np.ndarray) -> None:
+                self.frames.append(frame)
+
+        writer = MemoryWriter()
+        calls: dict[str, object] = {}
+
+        def fake_crossfade(
+            writer_arg: MemoryWriter,
+            _start_frame: np.ndarray,
+            end_frame: np.ndarray,
+            frame_count: int,
+        ) -> None:
+            calls["writer"] = writer_arg
+            calls["frame_count"] = frame_count
+            writer_arg.append_data(end_frame)
+
+        mocker.patch.object(
+            stv_video,
+            "append_crossfade",
+            side_effect=fake_crossfade,
+        )
+
+        intro_frame = np.zeros((64, 64, 3), dtype=np.uint8)
+        crossfade_frames = 4
+
+        stv_optimization.run_optimization_loop(
+            model,
+            input_img,
+            optimizer,
+            config=config,
+            video_writer=writer,
+            intro_last_frame=intro_frame,
+            intro_crossfade_frames=crossfade_frames,
+        )
+
+        assert calls["writer"] is writer
+        assert calls["frame_count"] == crossfade_frames
+        expected_min_frames = 2
+        assert len(writer.frames) >= expected_min_frames
 
     def test_csv_logger_initialization_failure_logs_error(
         self,

@@ -28,6 +28,8 @@ from style_transfer_visualizer.config_defaults import (
     DEFAULT_STEPS,
     DEFAULT_STYLE_LAYERS,
     DEFAULT_STYLE_WEIGHT,
+    DEFAULT_VIDEO_INTRO_DURATION,
+    DEFAULT_VIDEO_INTRO_ENABLED,
     DEFAULT_VIDEO_QUALITY,
 )
 from style_transfer_visualizer.constants import (
@@ -48,10 +50,10 @@ class OptimizationConfig(BaseModel):
     seed: int = Field(DEFAULT_SEED, ge=0)
     normalize: bool = DEFAULT_NORMALIZE
     style_layers: list[int] = Field(
-        default_factory=lambda: DEFAULT_STYLE_LAYERS,
+        default_factory=lambda: list(DEFAULT_STYLE_LAYERS),
     )
     content_layers: list[int] = Field(
-        default_factory=lambda: DEFAULT_CONTENT_LAYERS,
+        default_factory=lambda: list(DEFAULT_CONTENT_LAYERS),
     )
 
 class VideoConfig(BaseModel):
@@ -66,6 +68,11 @@ class VideoConfig(BaseModel):
     )
     create_video: bool = DEFAULT_CREATE_VIDEO
     final_only: bool = DEFAULT_FINAL_ONLY
+    intro_enabled: bool = DEFAULT_VIDEO_INTRO_ENABLED
+    intro_duration_seconds: float = Field(
+        DEFAULT_VIDEO_INTRO_DURATION,
+        ge=0.0,
+    )
     metadata_title: str | None = None
     metadata_artist: str | None = None
 

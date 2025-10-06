@@ -20,6 +20,7 @@ A command-line tool that applies neural style transfer to images using PyTorch. 
 - Neural style transfer using VGG19
 - Configurable via CLI or TOML
 - Timelapse video generation with adjustable FPS and quality
+- Optional video intro that fades in a content/style comparison frame
 - Optional normalization and initialization methods
 - Save intermediate steps or final image only
 - Deterministic execution with `--seed`
@@ -72,6 +73,8 @@ uv run style-visualizer --config config.toml
 - `--init-method {random,white,content}`
 - `--fps`, `--quality`
 - `--no-normalize`, `--no-video`, `--final-only`
+- `--intro-duration N` (seconds to show the intro comparison frame, default: 10)
+- `--no-intro` (skip the intro comparison segment)
 - `--device cpu|cuda`
 - `--seed`
 - `--config config.toml`
@@ -79,6 +82,24 @@ uv run style-visualizer --config config.toml
 - `--log-every N` (log every N steps, default: 10)
 - `--metadata-title "Custom Title"` (override MP4 Title metadata)
 - `--metadata-artist "Custom Artist"` (override MP4 Artist metadata)
+---
+
+## Video Intro Segment
+
+Every timelapse now starts with a short intro sequence that fades in a
+side-by-side comparison of the content and style images (the same layout
+produced by `--compare-inputs`). The intro:
+
+- Fades in from black (~1 second), holds for `--intro-duration` seconds
+  (default `10`), then crossfades into the first stylization frame.
+- Adapts to your output FPS so the transition remains smooth regardless of
+  frame rate.
+- Can be disabled entirely with `--no-intro` if you prefer to jump straight to
+  the optimization timelapse.
+
+These controls are also available in TOML configs through
+`video.intro_enabled` and `video.intro_duration_seconds`.
+
 ---
 
 ## Loss Logging Options

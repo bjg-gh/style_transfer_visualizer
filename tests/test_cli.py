@@ -256,6 +256,8 @@ class TestCLIRunFromArgs:
             device="cpu",
             metadata_title="Title",
             metadata_artist="Artist",
+            no_intro=False,
+            intro_duration=-5.0,
             compare_inputs=False,
             compare_result=False,
         )
@@ -284,6 +286,8 @@ class TestCLIRunFromArgs:
         assert cfg.video.save_every == 10  # noqa: PLR2004
         assert cfg.video.metadata_title == "Title"
         assert cfg.video.metadata_artist == "Artist"
+        assert cfg.video.intro_enabled is True
+        assert cfg.video.intro_duration_seconds == 0.0
         assert cfg.optimization.init_method == "white"
         assert cfg.output.output == "out"
 
@@ -305,6 +309,7 @@ class TestCLIRunFromArgs:
             no_normalize=True,
             no_video=True,
             final_only=False,
+            no_intro=True,
             quality=DEFAULT_VIDEO_QUALITY,
             seed=DEFAULT_SEED,
             device=DEFAULT_DEVICE,
@@ -328,6 +333,7 @@ class TestCLIRunFromArgs:
         cfg = captured["cfg"]
         assert cfg.optimization.normalize is False
         assert cfg.video.create_video is False
+        assert cfg.video.intro_enabled is False
 
     def test_run_from_args_config_not_validating(
         self,

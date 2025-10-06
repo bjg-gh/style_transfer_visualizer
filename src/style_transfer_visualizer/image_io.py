@@ -1,4 +1,6 @@
 """Image loading, preprocessing, and normalization logic."""
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -52,8 +54,11 @@ def validate_image_dimensions(img: Image.Image) -> None:
                )
         raise ValueError(msg)
     if img.width > MAX_DIMENSION or img.height > MAX_DIMENSION:
-        logger.warning("Image is large: %dx%d. This may slow"
-                       " processing.",img.width, img.height)
+        logger.warning(
+            "Image is large: %dx%d. This may slow processing.",
+            img.width,
+            img.height,
+        )
 
 
 def apply_transforms(
@@ -63,12 +68,18 @@ def apply_transforms(
     normalize: bool,
 ) -> torch.Tensor:
     """Convert PIL image to tensor and optionally apply normalization."""
-    pipeline: list[Callable[[Image.Image],
-                            torch.Tensor]] = [transforms.ToTensor()]
+    pipeline: list[Callable[[Image.Image], torch.Tensor]] = [
+        transforms.ToTensor(),
+    ]
     if normalize:
-        pipeline.append(transforms.Normalize(mean=IMAGENET_MEAN,
-                                             std=IMAGENET_STD))
-    loader: Callable[[Image.Image],torch.Tensor] = transforms.Compose(pipeline)
+        pipeline.append(
+            transforms.Normalize(
+                mean=IMAGENET_MEAN,
+                std=IMAGENET_STD,
+            ),
+        )
+    loader: Callable[[Image.Image], torch.Tensor]
+    loader = transforms.Compose(pipeline)
     tensor = cast("torch.Tensor", loader(img))
     return tensor.unsqueeze(0).to(device)
 
@@ -106,10 +117,12 @@ def load_image_to_tensor(
 
 def denormalize(tensor: torch.Tensor) -> torch.Tensor:
     """Undo ImageNet normalization on tensor."""
-    mean = torch.tensor(
-            IMAGENET_MEAN).view(*DENORM_VIEW_SHAPE).to(tensor.device)
-    std = torch.tensor(
-            IMAGENET_STD).view(*DENORM_VIEW_SHAPE).to(tensor.device)
+    mean = torch.tensor(IMAGENET_MEAN).view(*DENORM_VIEW_SHAPE).to(
+        tensor.device,
+    )
+    std = torch.tensor(IMAGENET_STD).view(*DENORM_VIEW_SHAPE).to(
+        tensor.device,
+    )
     return tensor * std + mean
 
 
