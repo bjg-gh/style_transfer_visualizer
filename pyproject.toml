@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "style-transfer-visualizer"
-version = "1.2.0-dev2"
+version = "1.2.0-dev3"
 description = "A command-line tool for neural style transfer with PyTorch"
 authors = [{ name = "Ben Goldsmith" }]
 readme = "README.md"
@@ -91,6 +91,8 @@ docstring-code-line-length = 72
 quote-style = "double"
 
 [tool.pyright]
+venvPath = "."
+venv = ".venv"
 include = ["src"]
 exclude = ["**/__pycache__"]
 reportMissingImports = true

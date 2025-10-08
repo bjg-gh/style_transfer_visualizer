@@ -11,6 +11,7 @@ import style_transfer_visualizer.main as stv_main
 from style_transfer_visualizer.config_defaults import (
     DEFAULT_LOG_EVERY,
     DEFAULT_VIDEO_INTRO_DURATION,
+    DEFAULT_VIDEO_OUTRO_DURATION,
 )
 from style_transfer_visualizer.constants import (
     COLOR_GREY,
@@ -157,6 +158,26 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=argparse.SUPPRESS,
     )
     video.add_argument(
+        "--no-final-frame-compare",
+        dest="final_frame_compare",
+        action="store_false",
+        default=argparse.SUPPRESS,
+        help=(
+            "Disable the final comparison frame so the timelapse ends on the "
+            "last stylization step."
+        ),
+    )
+    video.add_argument(
+        "--outro-duration",
+        type=float,
+        help=(
+            "Seconds to display the final comparison frame at the end of the "
+            "video (default: "
+            f"{DEFAULT_VIDEO_OUTRO_DURATION})"
+        ),
+        default=argparse.SUPPRESS,
+    )
+    video.add_argument(
         "--metadata-title",
         type=str,
         help="Custom title to embed in MP4 metadata",
@@ -215,6 +236,11 @@ def log_parameters(
     logger.info("Video Intro: %s",
                 "Enabled" if cfg.video.intro_enabled else "Disabled")
     logger.info("Intro Duration (s): %.2f", cfg.video.intro_duration_seconds)
+    logger.info("Outro Duration (s): %.2f", cfg.video.outro_duration_seconds)
+    logger.info(
+        "Final Frame Compare: %s",
+        "Enabled" if cfg.video.final_frame_compare else "Disabled",
+    )
     logger.info("Loss Plotting: %s",
                 "Enabled" if cfg.output.plot_losses else "Disabled")
     logger.info("Random Seed: %d", cfg.optimization.seed)
@@ -284,24 +310,32 @@ def _apply_video_overrides(
     args: argparse.Namespace,
 ) -> None:
     """Apply CLI overrides for the [video] section."""
-    if hasattr(args, "save_every"):
-        cfg.video.save_every = args.save_every
-    if hasattr(args, "fps"):
-        cfg.video.fps = args.fps
-    if hasattr(args, "quality"):
-        cfg.video.quality = args.quality
-    if getattr(args, "no_video", False):
-        cfg.video.create_video = False
+    direct_attrs = {
+        "save_every": "save_every",
+        "fps": "fps",
+        "quality": "quality",
+        "metadata_title": "metadata_title",
+        "metadata_artist": "metadata_artist",
+    }
+    for cli_name, field_name in direct_attrs.items():
+        if hasattr(args, cli_name):
+            setattr(cfg.video, field_name, getattr(args, cli_name))
+
+    for flag, field_name in (
+        ("no_video", "create_video"),
+        ("no_intro", "intro_enabled"),
+    ):
+        if getattr(args, flag, False):
+            setattr(cfg.video, field_name, False)
+
     if getattr(args, "final_only", False):
         cfg.video.final_only = True
-    if getattr(args, "no_intro", False):
-        cfg.video.intro_enabled = False
     if hasattr(args, "intro_duration"):
         cfg.video.intro_duration_seconds = max(args.intro_duration, 0.0)
-    if hasattr(args, "metadata_title"):
-        cfg.video.metadata_title = args.metadata_title
-    if hasattr(args, "metadata_artist"):
-        cfg.video.metadata_artist = args.metadata_artist
+    if hasattr(args, "outro_duration"):
+        cfg.video.outro_duration_seconds = max(args.outro_duration, 0.0)
+    if hasattr(args, "final_frame_compare"):
+        cfg.video.final_frame_compare = args.final_frame_compare
 
 
 def _apply_hardware_overrides(

@@ -14,6 +14,7 @@ import style_transfer_visualizer.video as stv_video
 from style_transfer_visualizer.config import VideoConfig
 
 DEFAULT_INTRO_DURATION = 0.0
+DEFAULT_OUTRO_DURATION = 0.0
 
 
 class DummyWriter:
@@ -27,6 +28,14 @@ class DummyWriter:
         self.frames.append(frame)
 
 
+class _SizedDummyWriter(DummyWriter):
+    """Writer stub exposing an ffmpeg-style _size attribute."""
+
+    def __init__(self, size: tuple[int, int]) -> None:
+        super().__init__()
+        self._size: tuple[int, int] = size
+
+
 def test_setup_video_writer_returns_none_when_disabled() -> None:
     """Test that None is returned when create_video is False."""
     cfg = VideoConfig(
@@ -35,6 +44,7 @@ def test_setup_video_writer_returns_none_when_disabled() -> None:
         save_every=10,
         create_video=False,
         intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
     )
     result = stv_video.setup_video_writer(cfg, Path(), "test.mp4")
     assert result is None
@@ -48,6 +58,7 @@ def test_writer_called_with_correct_args(tmp_path: Path) -> None:
         save_every=10,
         create_video=True,
         intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
     )
 
     with patch(
@@ -83,6 +94,7 @@ def test_writer_uses_custom_title_and_artist_when_provided(
         metadata_title="Custom Title",
         metadata_artist="Custom Artist",
         intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
     )
     with patch(
         "style_transfer_visualizer.video.imageio.get_writer",
@@ -104,6 +116,7 @@ def test_writer_non_mp4_has_no_metadata(tmp_path: Path) -> None:
         save_every=5,
         create_video=True,
         intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
     )
 
     with patch("style_transfer_visualizer.video.imageio.get_writer") as mock_w:
@@ -229,6 +242,7 @@ def test_prepare_intro_segment_returns_none_when_intro_disabled(
         create_video=True,
         intro_enabled=False,
         intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
     )
     writer = DummyWriter()
     result = stv_video.prepare_intro_segment(
@@ -253,6 +267,7 @@ def test_prepare_intro_segment_generates_frames(
         create_video=True,
         intro_enabled=True,
         intro_duration_seconds=0.2,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
     )
     writer = DummyWriter()
     info = stv_video.prepare_intro_segment(
@@ -294,3 +309,145 @@ def test_append_crossfade_limits_maximum_frames() -> None:
     stv_video.append_crossfade(writer, start, end, 50)
     assert len(writer.frames) == stv_video.INTRO_MAX_CROSSFADE_FRAMES
     assert all(frame.shape == (2, 2, 3) for frame in writer.frames)
+
+
+def test_resolve_writer_dimensions_respects_writer_size() -> None:
+    """Valid writer dimensions should drive resize behaviour."""
+    writer = _SizedDummyWriter((32, 48))
+    last_frame = np.zeros((64, 64, 3), dtype=np.uint8)
+
+    resized, width, height = stv_video._resolve_writer_dimensions(  # noqa: SLF001
+        writer,
+        last_frame,
+    )
+
+    assert (width, height) == (32, 48)
+    assert resized.shape == (48, 32, 3)
+
+
+def test_resolve_writer_dimensions_ignores_invalid_writer_size() -> None:
+    """Non-positive writer dimensions should be ignored."""
+    writer = _SizedDummyWriter((0, 48))
+    last_frame = np.zeros((40, 50, 3), dtype=np.uint8)
+
+    resized, width, height = stv_video._resolve_writer_dimensions(  # noqa: SLF001
+        writer,
+        last_frame,
+    )
+
+    assert (width, height) == (50, 40)
+    assert resized.shape == last_frame.shape
+    np.testing.assert_array_equal(resized, last_frame)
+
+
+def test_append_final_comparison_frame_skips_when_disabled(
+    content_image: Path,
+    style_image: Path,
+) -> None:
+    """Final comparison frame should not be appended when disabled."""
+    cfg = VideoConfig(
+        fps=5,
+        quality=5,
+        save_every=1,
+        create_video=True,
+        final_frame_compare=False,
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+    )
+    writer = DummyWriter()
+    last_frame = np.zeros((64, 64, 3), dtype=np.uint8)
+
+    stv_video.append_final_comparison_frame(
+        cfg,
+        writer,
+        content_image,
+        style_image,
+        last_frame,
+    )
+
+    assert writer.frames == []
+
+
+def test_append_final_comparison_frame_appends_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+    content_image: Path,
+    style_image: Path,
+) -> None:
+    """Final comparison frame should be generated and appended."""
+    cfg = VideoConfig(
+        fps=5,
+        quality=5,
+        save_every=1,
+        create_video=True,
+        final_frame_compare=True,
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=0.2,
+    )
+    writer = DummyWriter()
+    last_frame = np.zeros((64, 64, 3), dtype=np.uint8)
+
+    def fake_comparison(**_unused: object) -> Image.Image:
+        return Image.new("RGB", (64, 64), color="red")
+
+    monkeypatch.setattr(
+        stv_video,
+        "make_gallery_comparison",
+        fake_comparison,
+    )
+
+    stv_video.append_final_comparison_frame(
+        cfg,
+        writer,
+        content_image,
+        style_image,
+        last_frame,
+    )
+
+    expected_crossfade = max(
+        1,
+        min(
+            round(cfg.fps * stv_video.OUTRO_CROSSFADE_SECONDS),
+            stv_video.OUTRO_MAX_CROSSFADE_FRAMES,
+        ),
+    )
+    expected_hold = max(
+        stv_video.FINAL_COMPARISON_MIN_FRAMES,
+        round(cfg.fps * cfg.outro_duration_seconds),
+    )
+    assert len(writer.frames) == expected_crossfade + expected_hold
+    assert all(frame.shape == last_frame.shape for frame in writer.frames)
+    # The tail frames should match the final comparison image exactly.
+    np.testing.assert_array_equal(
+        writer.frames[-1],
+        writer.frames[-expected_hold],
+    )
+
+
+def test_append_final_comparison_frame_validates_shape(
+    content_image: Path,
+    style_image: Path,
+) -> None:
+    """Non-RGB final frames should raise an error."""
+    cfg = VideoConfig(
+        fps=5,
+        quality=5,
+        save_every=1,
+        create_video=True,
+        final_frame_compare=True,
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+    )
+    writer = DummyWriter()
+    last_frame = np.zeros((10, 10), dtype=np.uint8)
+
+    with pytest.raises(
+        ValueError,
+        match="Last timelapse frame must be an RGB array",
+    ):
+        stv_video.append_final_comparison_frame(
+            cfg,
+            writer,
+            content_image,
+            style_image,
+            last_frame,
+        )

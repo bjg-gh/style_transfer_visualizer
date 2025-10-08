@@ -30,6 +30,7 @@ from style_transfer_visualizer.config_defaults import (
     DEFAULT_STYLE_LAYERS,
     DEFAULT_STYLE_WEIGHT,
     DEFAULT_VIDEO_INTRO_DURATION,
+    DEFAULT_VIDEO_OUTRO_DURATION,
     DEFAULT_VIDEO_QUALITY,
 )
 
@@ -74,6 +75,7 @@ def test_load_valid_config() -> None:
     assert cfg.video.fps == 30  # noqa: PLR2004
     assert cfg.video.final_only is True
     assert cfg.hardware.device == "cpu"
+    assert cfg.video.outro_duration_seconds == DEFAULT_VIDEO_OUTRO_DURATION
 
 
 def test_missing_file_raises() -> None:
@@ -93,6 +95,7 @@ def test_partial_config_uses_defaults() -> None:
     assert cfg.optimization.lr == DEFAULT_LEARNING_RATE
     assert cfg.video.fps == DEFAULT_FPS
     assert cfg.hardware.device == DEFAULT_DEVICE
+    assert cfg.video.outro_duration_seconds == DEFAULT_VIDEO_OUTRO_DURATION
 
 
 def test_video_config_invalid_fps() -> None:
@@ -103,6 +106,7 @@ def test_video_config_invalid_fps() -> None:
             quality=DEFAULT_VIDEO_QUALITY,
             save_every=DEFAULT_SAVE_EVERY,
             intro_duration_seconds=DEFAULT_VIDEO_INTRO_DURATION,
+            outro_duration_seconds=DEFAULT_VIDEO_OUTRO_DURATION,
         )
     assert "fps" in str(exc_info.value)
 
@@ -115,6 +119,7 @@ def test_video_config_invalid_quality() -> None:
             fps=DEFAULT_FPS,
             save_every=DEFAULT_SAVE_EVERY,
             intro_duration_seconds=DEFAULT_VIDEO_INTRO_DURATION,
+            outro_duration_seconds=DEFAULT_VIDEO_OUTRO_DURATION,
         )
     assert "quality" in str(exc_info.value)
 
@@ -182,6 +187,7 @@ def test_video_config_fps_upper_bound() -> None:
             quality=DEFAULT_VIDEO_QUALITY,
             save_every=DEFAULT_SAVE_EVERY,
             intro_duration_seconds=DEFAULT_VIDEO_INTRO_DURATION,
+            outro_duration_seconds=DEFAULT_VIDEO_OUTRO_DURATION,
         )
     assert "fps" in str(exc_info.value)
 
@@ -205,6 +211,7 @@ def test_loader_with_empty_toml_uses_all_defaults() -> None:
     assert cfg.video.fps == DEFAULT_FPS
     assert cfg.video.quality == DEFAULT_VIDEO_QUALITY
     assert cfg.hardware.device == DEFAULT_DEVICE
+    assert cfg.video.outro_duration_seconds == DEFAULT_VIDEO_OUTRO_DURATION
     assert cfg.output.output == DEFAULT_OUTPUT_DIR
     assert cfg.output.log_every == DEFAULT_LOG_EVERY
 

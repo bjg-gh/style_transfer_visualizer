@@ -1119,7 +1119,7 @@ wheels = [
 
 [[package]]
 name = "style-transfer-visualizer"
-version = "1.2.0.dev2"
+version = "1.2.0.dev3"
 source = { editable = "." }
 dependencies = [
     { name = "imageio" },

@@ -70,6 +70,13 @@ INTRO_CROSSFADE_SECONDS = 0.5
 INTRO_MAX_FADE_FRAMES = 48
 INTRO_MAX_CROSSFADE_FRAMES = 12
 INTRO_MIN_DIM = 128
+OUTRO_CROSSFADE_SECONDS = 0.5
+OUTRO_MAX_CROSSFADE_FRAMES = 12
+OUTRO_MIN_DIM = 512
+FINAL_COMPARISON_MIN_FRAMES = 1
+_FRAME_NDIMS = 3
+_RGB_CHANNELS = 3
+_SIZE_TUPLE_LEN = 2
 
 
 def _blend_frames(
@@ -166,15 +173,134 @@ def append_crossfade(
     start_frame: np.ndarray,
     end_frame: np.ndarray,
     frame_count: int,
+    *,
+    max_frames: int = INTRO_MAX_CROSSFADE_FRAMES,
 ) -> None:
     """Append a quick crossfade between intro and stylized frame."""
     if frame_count <= 0:
         return
-    limited = max(1, min(frame_count, INTRO_MAX_CROSSFADE_FRAMES))
+    limited = max(1, min(frame_count, max_frames))
     for idx in range(limited):
         alpha = (idx + 1) / (limited + 1)
         writer.append_data(_blend_frames(start_frame, end_frame, alpha))
 
+
+def _resolve_writer_dimensions(
+    writer: imageio.plugins.ffmpeg.FfmpegFormat.Writer,
+    last_frame: np.ndarray,
+) -> tuple[np.ndarray, int, int]:
+    """Return the resized last frame and writer-aligned dimensions."""
+    if last_frame.ndim != _FRAME_NDIMS or last_frame.shape[2] != _RGB_CHANNELS:
+        msg = "Last timelapse frame must be an RGB array"
+        raise ValueError(msg)
+
+    last_rgb = np.asarray(last_frame, dtype=np.uint8)
+    target_width = last_rgb.shape[1]
+    target_height = last_rgb.shape[0]
+
+    writer_size = getattr(writer, "_size", None)
+    if isinstance(writer_size, tuple) and len(writer_size) == _SIZE_TUPLE_LEN:
+        writer_w, writer_h = writer_size
+        if writer_w > 0 and writer_h > 0:
+            target_width = int(writer_w)
+            target_height = int(writer_h)
+
+    if (target_height, target_width) != last_rgb.shape[:2]:
+        resized = Image.fromarray(last_rgb).resize(
+            (target_width, target_height),
+            Image.Resampling.LANCZOS,
+        )
+        last_rgb = np.asarray(resized, dtype=np.uint8)
+
+    return last_rgb, target_width, target_height
+
+
+def _build_outro_frame(
+    content_style_paths: tuple[Path, Path],
+    result_image: Image.Image,
+    frame_params: FrameParams,
+    *,
+    target_width: int,
+    target_height: int,
+) -> np.ndarray:
+    """Create the outro comparison image resized for the video writer."""
+    render_width = max(target_width, OUTRO_MIN_DIM)
+    render_height = max(target_height, OUTRO_MIN_DIM)
+    render_size = (render_width, render_height)
+
+    with ExitStack() as stack:
+        content_path, style_path = content_style_paths
+        content = stack.enter_context(Image.open(content_path))
+        style = stack.enter_context(Image.open(style_path))
+        comparison = make_gallery_comparison(
+            content=content,
+            style=style,
+            result=result_image,
+            target_size=render_size,
+            layout="gallery-stacked-left",
+            wall_color=COLOR_GREY,
+            frame=frame_params,
+        )
+
+    comparison = comparison.convert("RGB")
+    if comparison.size != (target_width, target_height):
+        comparison = comparison.resize(
+            (target_width, target_height),
+            Image.Resampling.LANCZOS,
+        )
+    return np.asarray(comparison, dtype=np.uint8)
+
+
+def append_final_comparison_frame(
+    config: VideoConfig,
+    writer: imageio.plugins.ffmpeg.FfmpegFormat.Writer | None,
+    content_path: Path,
+    style_path: Path,
+    last_frame: np.ndarray,
+) -> None:
+    """
+    Append a final comparison frame showing content, style, and result.
+
+    Uses the gallery wall layout with labels to mirror the standalone
+    comparison output. Includes a short crossfade from the most recent
+    timelapse frame followed by a configurable hold duration. No-op when
+    the feature is disabled.
+    """
+    if (
+        writer is None
+        or not config.create_video
+        or not config.final_frame_compare
+    ):
+        return
+    last_rgb, target_width, target_height = _resolve_writer_dimensions(
+        writer,
+        last_frame,
+    )
+    result_image = Image.fromarray(np.asarray(last_frame, dtype=np.uint8))
+    frame_params = FrameParams(frame_tone="gold", label="on")
+    frame_np = _build_outro_frame(
+        (content_path, style_path),
+        result_image,
+        frame_params,
+        target_width=target_width,
+        target_height=target_height,
+    )
+
+    crossfade_raw = round(config.fps * OUTRO_CROSSFADE_SECONDS)
+    crossfade_frames = max(1, min(crossfade_raw, OUTRO_MAX_CROSSFADE_FRAMES))
+    append_crossfade(
+        writer,
+        last_rgb,
+        frame_np,
+        crossfade_frames,
+        max_frames=OUTRO_MAX_CROSSFADE_FRAMES,
+    )
+
+    outro_seconds = max(0.0, config.outro_duration_seconds)
+    hold_frames_raw = round(config.fps * outro_seconds)
+    hold_frames = max(FINAL_COMPARISON_MIN_FRAMES, hold_frames_raw)
+    for _ in range(hold_frames):
+        writer.append_data(frame_np)
 
 
 def setup_video_writer(

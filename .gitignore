@@ -74,6 +74,19 @@ venv.bak/
 *.iml
 *.idea/
 
+# Visual Studio / VS Code generated files
+*.vsidx
+*.wsuo
+ProjectSettings.json
+slnx.sqlite
+VSWorkspaceState.json
+DocumentLayout.json
+
+# Specific settings that may contain sensitive data
+# (Only ignore if not needed by the team)
+.vscode/settings.json
+.vscode/launch.json
+
 # Environments
 .python-version
 
