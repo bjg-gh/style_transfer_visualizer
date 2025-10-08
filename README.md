@@ -20,7 +20,7 @@ A command-line tool that applies neural style transfer to images using PyTorch. 
 - Neural style transfer using VGG19
 - Configurable via CLI or TOML
 - Timelapse video generation with adjustable FPS and quality
-- Optional video intro that fades in a content/style comparison frame
+- Intro and outro comparison segments for videos with configurable timing
 - Optional normalization and initialization methods
 - Save intermediate steps or final image only
 - Deterministic execution with `--seed`
@@ -74,7 +74,9 @@ uv run style-visualizer --config config.toml
 - `--fps`, `--quality`
 - `--no-normalize`, `--no-video`, `--final-only`
 - `--intro-duration N` (seconds to show the intro comparison frame, default: 10)
+- `--outro-duration N` (seconds to hold the outro comparison frame, default: 10)
 - `--no-intro` (skip the intro comparison segment)
+- `--no-final-frame-compare` (skip the outro comparison segment)
 - `--device cpu|cuda`
 - `--seed`
 - `--config config.toml`
@@ -84,11 +86,11 @@ uv run style-visualizer --config config.toml
 - `--metadata-artist "Custom Artist"` (override MP4 Artist metadata)
 ---
 
-## Video Intro Segment
+## Video Intro & Outro Segments
 
-Every timelapse now starts with a short intro sequence that fades in a
-side-by-side comparison of the content and style images (the same layout
-produced by `--compare-inputs`). The intro:
+Every timelapse now starts and ends with comparison sequences by default.
+
+The intro matches the `--compare-inputs` gallery layout and:
 
 - Fades in from black (~1 second), holds for `--intro-duration` seconds
   (default `10`), then crossfades into the first stylization frame.
@@ -97,8 +99,15 @@ produced by `--compare-inputs`). The intro:
 - Can be disabled entirely with `--no-intro` if you prefer to jump straight to
   the optimization timelapse.
 
-These controls are also available in TOML configs through
-`video.intro_enabled` and `video.intro_duration_seconds`.
+After the final optimization frame the video crossfades into a gallery-style
+comparison of the content, style, and result images:
+
+- Uses the same stacked layout as `--compare-result` with labels and frames.
+- Holds for `--outro-duration` seconds (default `10`) before the video ends.
+- Disable it with `--no-final-frame-compare` to retain the original ending.
+
+These options map to `video.intro_enabled`, `video.intro_duration_seconds`,
+`video.final_frame_compare`, and `video.outro_duration_seconds` in TOML configs.
 
 ---
 

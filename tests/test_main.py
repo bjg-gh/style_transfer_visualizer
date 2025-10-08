@@ -302,7 +302,11 @@ def test_style_transfer_passes_intro_info(
 
     class StubWriter:
         def __init__(self) -> None:
+            self.frames: list[np.ndarray] = []
             self.closed = False
+
+        def append_data(self, frame: np.ndarray) -> None:
+            self.frames.append(frame)
 
         def close(self) -> None:
             self.closed = True
@@ -412,7 +416,11 @@ def test_style_transfer_handles_missing_intro_segment(
 
     class StubWriter:
         def __init__(self) -> None:
+            self.frames: list[np.ndarray] = []
             self.closed = False
+
+        def append_data(self, frame: np.ndarray) -> None:
+            self.frames.append(frame)
 
         def close(self) -> None:
             self.closed = True
@@ -443,6 +451,126 @@ def test_style_transfer_handles_missing_intro_segment(
     assert isinstance(captured["writer"], StubWriter)
     assert captured["intro_last_frame"] is None
     assert captured["intro_crossfade_frames"] == expected_crossfade
+    assert writer_instance.closed is True
+
+
+def test_style_transfer_appends_final_comparison_frame(
+    test_dir: str,
+    content_image: str,
+    style_image: str,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Final comparison frame should be appended when enabled."""
+    output_dir = setup_test_directory(test_dir, "final_compare_frame")
+    dummy_tensor = torch.rand(1, 3, 64, 64)
+
+    monkeypatch.setattr(
+        stv_utils,
+        "validate_input_paths",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        stv_utils,
+        "validate_parameters",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        stv_utils,
+        "setup_random_seed",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        stv_utils,
+        "setup_device",
+        lambda *_a, **_k: torch.device("cpu"),
+    )
+    monkeypatch.setattr(
+        stv_utils,
+        "setup_output_directory",
+        lambda _p: Path(output_dir),
+    )
+    monkeypatch.setattr(
+        stv_utils,
+        "save_outputs",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        stv_image_io,
+        "load_image_to_tensor",
+        lambda *_a, **_k: dummy_tensor,
+    )
+    monkeypatch.setattr(
+        stv_core_model,
+        "prepare_model_and_input",
+        lambda *_a, **_k: ("model", dummy_tensor.clone(), "optimizer"),
+    )
+
+    monkeypatch.setattr(
+        stv_optimization,
+        "run_optimization_loop",
+        lambda *_a, **_k: (dummy_tensor.clone(), {"loss": []}, 0.0),
+    )
+
+    class StubWriter:
+        def __init__(self) -> None:
+            self.appended: list[np.ndarray] = []
+            self.closed = False
+
+        def append_data(self, frame: np.ndarray) -> None:
+            self.appended.append(frame)
+
+        def close(self) -> None:
+            self.closed = True
+
+    writer_instance = StubWriter()
+    monkeypatch.setattr(
+        stv_video,
+        "setup_video_writer",
+        lambda *_a, **_k: writer_instance,
+    )
+    monkeypatch.setattr(
+        stv_video,
+        "prepare_intro_segment",
+        lambda *_a, **_k: None,
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_append(
+        cfg: VideoConfig,
+        writer: StubWriter,
+        content_path: str | Path,
+        style_path: str | Path,
+        last_frame: np.ndarray,
+    ) -> None:
+        captured["cfg"] = cfg
+        captured["writer"] = writer
+        captured["content"] = Path(content_path)
+        captured["style"] = Path(style_path)
+        captured["shape"] = last_frame.shape
+
+    monkeypatch.setattr(
+        stv_video,
+        "append_final_comparison_frame",
+        fake_append,
+    )
+
+    paths = InputPaths(content_path=content_image, style_path=style_image)
+    cfg = _base_config()
+    cfg.optimization.steps = 1
+    cfg.video.create_video = True
+    cfg.video.save_every = 1
+    cfg.video.final_frame_compare = True
+    cfg.output.output = output_dir
+
+    result = stv_main.style_transfer(paths, cfg)
+
+    assert isinstance(result, torch.Tensor)
+    assert captured["cfg"] is cfg.video
+    assert captured["writer"] is writer_instance
+    assert captured["content"] == Path(content_image)
+    assert captured["style"] == Path(style_image)
+    assert captured["shape"] == (64, 64, 3)
     assert writer_instance.closed is True
 
 

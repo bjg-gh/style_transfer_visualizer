@@ -28,8 +28,10 @@ from style_transfer_visualizer.config_defaults import (
     DEFAULT_STEPS,
     DEFAULT_STYLE_LAYERS,
     DEFAULT_STYLE_WEIGHT,
+    DEFAULT_VIDEO_FINAL_FRAME_COMPARE,
     DEFAULT_VIDEO_INTRO_DURATION,
     DEFAULT_VIDEO_INTRO_ENABLED,
+    DEFAULT_VIDEO_OUTRO_DURATION,
     DEFAULT_VIDEO_QUALITY,
 )
 from style_transfer_visualizer.constants import (
@@ -75,6 +77,11 @@ class VideoConfig(BaseModel):
     )
     metadata_title: str | None = None
     metadata_artist: str | None = None
+    final_frame_compare: bool = DEFAULT_VIDEO_FINAL_FRAME_COMPARE
+    outro_duration_seconds: float = Field(
+        DEFAULT_VIDEO_OUTRO_DURATION,
+        ge=0.0,
+    )
 
 
 class HardwareConfig(BaseModel):

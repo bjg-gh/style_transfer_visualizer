@@ -41,6 +41,7 @@ from style_transfer_visualizer.config_defaults import (
     DEFAULT_SEED,
     DEFAULT_STEPS,
     DEFAULT_STYLE_WEIGHT,
+    DEFAULT_VIDEO_OUTRO_DURATION,
     DEFAULT_VIDEO_QUALITY,
 )
 from style_transfer_visualizer.type_defs import InputPaths
@@ -258,6 +259,7 @@ class TestCLIRunFromArgs:
             metadata_artist="Artist",
             no_intro=False,
             intro_duration=-5.0,
+            outro_duration=-5.0,
             compare_inputs=False,
             compare_result=False,
         )
@@ -288,6 +290,7 @@ class TestCLIRunFromArgs:
         assert cfg.video.metadata_artist == "Artist"
         assert cfg.video.intro_enabled is True
         assert cfg.video.intro_duration_seconds == 0.0
+        assert cfg.video.outro_duration_seconds == 0.0
         assert cfg.optimization.init_method == "white"
         assert cfg.output.output == "out"
 
@@ -334,6 +337,128 @@ class TestCLIRunFromArgs:
         assert cfg.optimization.normalize is False
         assert cfg.video.create_video is False
         assert cfg.video.intro_enabled is False
+
+    def test_run_from_args_defaults_final_frame_compare_on(
+        self,
+        monkeypatch: MonkeyPatch,
+    ) -> None:
+        """Final comparison frame should be enabled by default."""
+        args = argparse.Namespace(
+            content="cat.jpg",
+            style="wave.jpg",
+            config=None,
+            validate_config_only=False,
+            output=DEFAULT_OUTPUT_DIR,
+            steps=DEFAULT_STEPS,
+            save_every=DEFAULT_SAVE_EVERY,
+            fps=DEFAULT_FPS,
+            quality=DEFAULT_VIDEO_QUALITY,
+            no_video=False,
+            final_only=False,
+            no_intro=False,
+            no_normalize=False,
+            compare_inputs=False,
+            compare_result=False,
+        )
+
+        captured: dict[str, Any] = {}
+
+        def fake_run(
+            _paths: InputPaths,
+            st_config: StyleTransferConfig,
+        ) -> torch.Tensor:
+            captured["cfg"] = st_config
+            return torch.rand(1)
+
+        monkeypatch.setattr(stv_main, "style_transfer", fake_run)
+        monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
+
+        stv_cli.run_from_args(args)
+        cfg = captured["cfg"]
+        assert cfg.video.final_frame_compare is True
+        assert cfg.video.outro_duration_seconds == DEFAULT_VIDEO_OUTRO_DURATION
+
+    def test_run_from_args_disables_final_frame_compare(
+        self,
+        monkeypatch: MonkeyPatch,
+    ) -> None:
+        """--no-final-frame-compare should disable the feature."""
+        args = argparse.Namespace(
+            content="cat.jpg",
+            style="wave.jpg",
+            config=None,
+            validate_config_only=False,
+            output=DEFAULT_OUTPUT_DIR,
+            steps=DEFAULT_STEPS,
+            save_every=DEFAULT_SAVE_EVERY,
+            fps=DEFAULT_FPS,
+            quality=DEFAULT_VIDEO_QUALITY,
+            no_video=False,
+            final_only=False,
+            final_frame_compare=False,
+            no_intro=False,
+            no_normalize=False,
+            compare_inputs=False,
+            compare_result=False,
+        )
+
+        captured: dict[str, Any] = {}
+
+        def fake_run(
+            _paths: InputPaths,
+            st_config: StyleTransferConfig,
+        ) -> torch.Tensor:
+            captured["cfg"] = st_config
+            return torch.rand(1)
+
+        monkeypatch.setattr(stv_main, "style_transfer", fake_run)
+        monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
+
+        stv_cli.run_from_args(args)
+        cfg = captured["cfg"]
+        assert cfg.video.final_frame_compare is False
+
+    def test_run_from_args_sets_outro_duration(
+        self,
+        monkeypatch: MonkeyPatch,
+    ) -> None:
+        """--outro-duration should override the default value."""
+        override_outro = 3.5
+        args = argparse.Namespace(
+            content="cat.jpg",
+            style="wave.jpg",
+            config=None,
+            validate_config_only=False,
+            output=DEFAULT_OUTPUT_DIR,
+            steps=DEFAULT_STEPS,
+            save_every=DEFAULT_SAVE_EVERY,
+            fps=DEFAULT_FPS,
+            quality=DEFAULT_VIDEO_QUALITY,
+            no_video=False,
+            final_only=False,
+            final_frame_compare=True,
+            outro_duration=override_outro,
+            no_intro=False,
+            no_normalize=False,
+            compare_inputs=False,
+            compare_result=False,
+        )
+
+        captured: dict[str, Any] = {}
+
+        def fake_run(
+            _paths: InputPaths,
+            st_config: StyleTransferConfig,
+        ) -> torch.Tensor:
+            captured["cfg"] = st_config
+            return torch.rand(1)
+
+        monkeypatch.setattr(stv_main, "style_transfer", fake_run)
+        monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
+
+        stv_cli.run_from_args(args)
+        cfg = captured["cfg"]
+        assert cfg.video.outro_duration_seconds == override_outro
 
     def test_run_from_args_config_not_validating(
         self,

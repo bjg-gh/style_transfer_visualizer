@@ -51,6 +51,12 @@ quality = 10
 create_video = true
 # If true, only save the final image
 final_only = false
+# Enable intro comparison segment and configure its duration (seconds)
+intro_enabled = true
+intro_duration_seconds = 10.0
+# Hold a final comparison frame at the end of the timelapse
+final_frame_compare = true
+outro_duration_seconds = 10.0
 # Optional MP4 metadata fields
 metadata_title = "Starry Night Transfer"
 metadata_artist = "Vincent Neural Gogh"

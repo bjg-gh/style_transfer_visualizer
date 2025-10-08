@@ -88,6 +88,32 @@ def style_transfer(
         intro_crossfade_frames=intro_crossfade_frames,
     )
 
+    if video_writer and config.video.final_frame_compare:
+        with torch.no_grad():
+            final_tensor = stv_image_io.prepare_image_for_output(
+                input_img,
+                normalize=config.optimization.normalize,
+            )
+        final_frame = (
+            final_tensor.squeeze(0)
+            .detach()
+            .cpu()
+            .mul(255.0)
+            .round()
+            .clamp(0, 255)
+            .to(torch.uint8)
+            .permute(1, 2, 0)
+            .contiguous()
+            .numpy()
+        )
+        stv_video.append_final_comparison_frame(
+            config.video,
+            video_writer,
+            content_path,
+            style_path,
+            final_frame,
+        )
+
     # Clean up and save outputs
     if video_writer:
         video_writer.close()
