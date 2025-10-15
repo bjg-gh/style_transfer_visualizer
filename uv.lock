@@ -4,10 +4,16 @@ requires-python = ">=3.12"
 resolution-markers = [
     "(platform_machine != 'aarch64' and extra != 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128') or (sys_platform != 'linux' and extra != 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128')",
     "platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128'",
-    "sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra != 'extra-25-style-transfer-visualizer-cu128'",
-    "sys_platform == 'linux' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra != 'extra-25-style-transfer-visualizer-cu128'",
+    "(platform_machine != 'AMD64' and sys_platform == 'win32' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra != 'extra-25-style-transfer-visualizer-cu128') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra != 'extra-25-style-transfer-visualizer-cu128')",
+    "platform_machine != 'x86_64' and sys_platform == 'linux' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra != 'extra-25-style-transfer-visualizer-cu128'",
+    "platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra != 'extra-25-style-transfer-visualizer-cu128'",
+    "platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra != 'extra-25-style-transfer-visualizer-cu128'",
     "sys_platform == 'darwin' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra != 'extra-25-style-transfer-visualizer-cu128'",
     "extra != 'extra-25-style-transfer-visualizer-cpu' and extra != 'extra-25-style-transfer-visualizer-cu128'",
+]
+required-markers = [
+    "platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "platform_machine == 'AMD64' and sys_platform == 'win32'",
 ]
 conflicts = [[
     { package = "style-transfer-visualizer", extra = "cpu" },
@@ -1174,8 +1180,9 @@ dependencies = [
 cpu = [
     { name = "torch", version = "2.9.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'extra-25-style-transfer-visualizer-cpu') or (extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128')" },
     { name = "torch", version = "2.9.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'extra-25-style-transfer-visualizer-cpu') or (extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128')" },
-    { name = "torchvision", version = "0.24.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'extra-25-style-transfer-visualizer-cpu') or (sys_platform == 'linux' and extra == 'extra-25-style-transfer-visualizer-cpu') or (extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128')" },
-    { name = "torchvision", version = "0.24.0+e437e35", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-25-style-transfer-visualizer-cpu') or (sys_platform == 'darwin' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128') or (sys_platform == 'linux' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128')" },
+    { name = "torchvision", version = "0.24.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine != 'x86_64' and sys_platform == 'linux' and extra == 'extra-25-style-transfer-visualizer-cpu') or (platform_machine == 'x86_64' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-25-style-transfer-visualizer-cpu') or (sys_platform != 'linux' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128')" },
+    { name = "torchvision", version = "0.24.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-25-style-transfer-visualizer-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-25-style-transfer-visualizer-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128') or (sys_platform == 'linux' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128') or (sys_platform == 'win32' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128')" },
+    { name = "torchvision", version = "0.24.0+e437e35", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine != 'AMD64' and sys_platform == 'win32' and extra == 'extra-25-style-transfer-visualizer-cpu') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-25-style-transfer-visualizer-cpu') or (sys_platform == 'darwin' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128') or (sys_platform == 'linux' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128') or (sys_platform == 'win32' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128')" },
 ]
 cu128 = [
     { name = "torch", version = "2.9.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" } },
@@ -1266,8 +1273,10 @@ name = "torch"
 version = "2.9.0+cpu"
 source = { registry = "https://download.pytorch.org/whl/cpu" }
 resolution-markers = [
-    "sys_platform != 'darwin' and sys_platform != 'linux'",
-    "sys_platform == 'linux'",
+    "(platform_machine != 'AMD64' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
+    "platform_machine != 'x86_64' and sys_platform == 'linux'",
+    "platform_machine == 'AMD64' and sys_platform == 'win32'",
+    "platform_machine == 'x86_64' and sys_platform == 'linux'",
 ]
 dependencies = [
     { name = "filelock", marker = "sys_platform != 'darwin'" },
@@ -1354,14 +1363,14 @@ name = "torchvision"
 version = "0.24.0"
 source = { registry = "https://download.pytorch.org/whl/cpu" }
 resolution-markers = [
-    "sys_platform == 'linux'",
+    "platform_machine != 'x86_64' and sys_platform == 'linux'",
     "sys_platform == 'darwin'",
 ]
 dependencies = [
-    { name = "numpy", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
-    { name = "pillow", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
+    { name = "numpy", marker = "(platform_machine != 'x86_64' and sys_platform == 'linux') or sys_platform == 'darwin'" },
+    { name = "pillow", marker = "(platform_machine != 'x86_64' and sys_platform == 'linux') or sys_platform == 'darwin'" },
     { name = "torch", version = "2.9.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'extra-25-style-transfer-visualizer-cpu') or (extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128')" },
-    { name = "torch", version = "2.9.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'linux' and extra == 'extra-25-style-transfer-visualizer-cpu') or (extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128')" },
+    { name = "torch", version = "2.9.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine != 'x86_64' and sys_platform == 'linux' and extra == 'extra-25-style-transfer-visualizer-cpu') or (platform_machine == 'x86_64' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128') or (sys_platform != 'linux' and extra == 'extra-25-style-transfer-visualizer-cpu' and extra == 'extra-25-style-transfer-visualizer-cu128')" },
 ]
 wheels = [
     { url = "https://download.pytorch.org/whl/cpu/torchvision-0.24.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:c61d40bcd2e2451e932902a702ad495ba1ec6f279e90b1e15cef2bb55dc911e2" },
@@ -1398,6 +1407,32 @@ wheels = [
 
 [[package]]
 name = "torchvision"
+version = "0.24.0+cpu"
+source = { registry = "https://download.pytorch.org/whl/cpu" }
+resolution-markers = [
+    "platform_machine == 'AMD64' and sys_platform == 'win32'",
+    "platform_machine == 'x86_64' and sys_platform == 'linux'",
+]
+dependencies = [
+    { name = "numpy", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
+    { name = "pillow", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
+    { name = "torch", version = "2.9.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
+]
+wheels = [
+    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.24.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:baa37f80155a3b055911d5c2418be1e16b95bb69f671dbb0d07d67504093e23d" },
+    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.24.0%2Bcpu-cp312-cp312-win_amd64.whl", hash = "sha256:6ec2ebf962e7dca034e06a6eb07dafe388b16e7b01168f1c10b0c299e95946d5" },
+    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.24.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:8d5802096749bc5cf006ff889bca7e368147770b0d47c7cd98859c799814455f" },
+    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.24.0%2Bcpu-cp313-cp313-win_amd64.whl", hash = "sha256:24ae40dd443486bd32118a431ee4f38a23455665c477bb42136415e2a1c940e5" },
+    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.24.0%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:b8bbac1a0aedb4c14c25474cc1d40da3f85372156b1048671ec1ef5901886b3a" },
+    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.24.0%2Bcpu-cp313-cp313t-win_amd64.whl", hash = "sha256:4340c881708c0c563430cf4ed4932d7d09e675ce6660ff06d61f12e3c8267a35" },
+    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.24.0%2Bcpu-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:214a12ae8a3332da83cace9e513dcfdb3a87606e11ee2bb256a4f0172c61441b" },
+    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.24.0%2Bcpu-cp314-cp314-win_amd64.whl", hash = "sha256:691be31ba48c8ad1a2ce066022f0cf24c701bb77f08dacc5fcf0964fc361444e" },
+    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.24.0%2Bcpu-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:1fa4ea1c4a33b1a21c69d066321fc8a89534f01cbecc1c54e726e340036aa61c" },
+    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.24.0%2Bcpu-cp314-cp314t-win_amd64.whl", hash = "sha256:ef4a10f713f2a0de08c791abeb9e4ab1e9c6e0ce563c7e83da139c99e6d2712e" },
+]
+
+[[package]]
+name = "torchvision"
 version = "0.24.0+cu128"
 source = { registry = "https://download.pytorch.org/whl/cu128" }
 resolution-markers = [
@@ -1426,12 +1461,12 @@ name = "torchvision"
 version = "0.24.0+e437e35"
 source = { registry = "https://download.pytorch.org/whl/cpu" }
 resolution-markers = [
-    "sys_platform != 'darwin' and sys_platform != 'linux'",
+    "(platform_machine != 'AMD64' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
 ]
 dependencies = [
-    { name = "numpy", marker = "sys_platform != 'darwin' and sys_platform != 'linux'" },
-    { name = "pillow", marker = "sys_platform != 'darwin' and sys_platform != 'linux'" },
-    { name = "torch", version = "2.9.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin' and sys_platform != 'linux'" },
+    { name = "numpy", marker = "(platform_machine != 'AMD64' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')" },
+    { name = "pillow", marker = "(platform_machine != 'AMD64' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')" },
+    { name = "torch", version = "2.9.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine != 'AMD64' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')" },
 ]
 wheels = [
     { url = "https://download.pytorch.org/whl/cpu/torchvision-0.24.0%2Be437e35-cp312-cp312-win_arm64.whl", hash = "sha256:c3e23d49a598c2edaf08d9d285fe9f74fca5ab39eb713ac3cee2a292bcecc442" },
