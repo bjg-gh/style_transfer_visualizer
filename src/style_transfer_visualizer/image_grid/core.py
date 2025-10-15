@@ -1,53 +1,23 @@
-"""
-Utilities to build horizontal image comparison grids.
-
-This module uses only PIL. It provides both a simple horizontal
-grid and a gallery-wall layout with framed panels.
-"""
+"""Core rendering primitives for building image comparison grids."""
 
 from __future__ import annotations
 
-from contextlib import ExitStack
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from functools import lru_cache
-from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from style_transfer_visualizer.constants import (
     COLOR_BEIGE,
     COLOR_BLACK,
-    COLOR_GREY,
     COLOR_WHITE,
-    RESOLUTION_FULL_HD,
 )
 
-if TYPE_CHECKING:
-    from collections.abc import Sequence
-
-    from style_transfer_visualizer.type_defs import LayoutName
-
-# Local types
 _RGB = tuple[int, int, int]
 
-# Index constants for gallery panels
-_CONTENT_IDX = 0
-_STYLE_IDX = 1
-_RESULT_IDX = 2
-
-# Layout proportions and spacing
-_GAP_FRACTION = 0.02              # used for panel gaps
-_LEFT_COL_FRACTION = 0.42         # stacked-left layout left column width
-_RESULT_INSET_FRACTION = 0.06     # inset for final panel box
-
-# Wall rendering
-_WALL_GRADIENT_CENTER = 220       # center luminance for vertical gradient
-_WALL_GRADIENT_RANGE = 20         # range around center
-_VIGNETTE_MARGIN_FRAC = 0.06      # vignette rectangle margin fraction
-
 # Texture and rendering parameters
-_FRAME_TEXTURE_MAX = 100
+FRAME_TEXTURE_MAX = 100
 _MIN_FRAME_OUTER_PX = 3
 _MIN_FRAME_INNER_PX = 2
 _BEVEL_ALPHA_MAX = 120
@@ -57,27 +27,17 @@ _NOISE_GAUSS_RADIUS = 2
 _BLEND_MAX = 0.25
 _ASPECT_SOLVE_ITERS = 6
 
-# Defaults
-_DEFAULT_HEIGHT = 512
-_DEFAULT_PAD = 16
+# Defaults shared with layouts
+DEFAULT_HEIGHT = 512
+DEFAULT_PAD = 16
+
+# Wall rendering
+_WALL_GRADIENT_CENTER = 220       # center luminance for vertical gradient
+_WALL_GRADIENT_RANGE = 20         # range around center
+_VIGNETTE_MARGIN_FRAC = 0.06      # vignette rectangle margin fraction
 
 
-# =====================
-# Simple grid utilities
-# =====================
-
-@dataclass(frozen=True)
-class GridParams:
-    """Parameters for the grid layout."""
-
-    target_height: int | None = _DEFAULT_HEIGHT
-    target_size: tuple[int, int] | None = None
-    pad: int = _DEFAULT_PAD
-    bg_color: _RGB = COLOR_WHITE
-    border_px: int = 0
-
-
-def _to_rgb(img: Image.Image, *, bg_color: _RGB) -> Image.Image:
+def to_rgb(img: Image.Image, *, bg_color: _RGB) -> Image.Image:
     """Convert PIL image to RGB, alpha compositing if needed."""
     if img.mode == "RGB":
         return img
@@ -99,14 +59,14 @@ def _resize_to_height(img: Image.Image, height: int) -> Image.Image:
     return img.resize((new_w, height), Image.Resampling.LANCZOS)
 
 
-def _draw_border(img: Image.Image, border_px: int) -> Image.Image:
+def draw_border(img: Image.Image, border_px: int) -> Image.Image:
     """Add a thin border around the image if requested."""
     if border_px <= 0:
         return img
     return ImageOps.expand(img, border=border_px, fill=COLOR_BLACK)
 
 
-def _scale_images_to_target(
+def scale_images_to_target(
     images: list[Image.Image],
     target_height: int | None,
     target_size: tuple[int, int] | None,
@@ -114,11 +74,11 @@ def _scale_images_to_target(
     """Resize images by target height unless exact target_size is set."""
     if target_size is not None and target_height is None:
         return images
-    work_h = target_height or _DEFAULT_HEIGHT
+    work_h = target_height or DEFAULT_HEIGHT
     return [_resize_to_height(im, work_h) for im in images]
 
 
-def _content_dimensions(
+def content_dimensions(
     images: list[Image.Image],
     pad: int,
 ) -> tuple[int, int, list[int], list[int]]:
@@ -130,7 +90,7 @@ def _content_dimensions(
     return content_w, content_h, widths, heights
 
 
-def _scale_images_to_fit_canvas(
+def scale_images_to_fit_canvas(
     images: list[Image.Image],
     pad: int,
     tight_w: int,
@@ -147,7 +107,7 @@ def _scale_images_to_fit_canvas(
     scale_h = target_h / tight_h
     scale = min(1.0, scale_w, scale_h)
     if scale >= 1.0:
-        cw, ch, _, _ = _content_dimensions(images, pad)
+        cw, ch, _, _ = content_dimensions(images, pad)
         return images, cw, ch
 
     def scale_im(im: Image.Image) -> Image.Image:
@@ -158,11 +118,11 @@ def _scale_images_to_fit_canvas(
         )
 
     scaled = [scale_im(im) for im in images]
-    cw, ch, _, _ = _content_dimensions(scaled, pad)
+    cw, ch, _, _ = content_dimensions(scaled, pad)
     return scaled, cw, ch
 
 
-def _paste_horizontally(
+def paste_horizontally(
     canvas: Image.Image,
     images: list[Image.Image],
     pad: int,
@@ -177,10 +137,6 @@ def _paste_horizontally(
         canvas.paste(im, (x, y_offset))
         x += im.size[0] + pad
 
-
-# =======================
-# Gallery wall components
-# =======================
 
 @dataclass(frozen=True)
 class FrameParams:
@@ -325,7 +281,7 @@ def _fit_panel_box_to_inner_aspect(
     return nx0, ny0, nx0 + pw, ny0 + ph
 
 
-def _fit_box_by_inner_aspect(
+def fit_box_by_inner_aspect(
     box: Rect,
     img: Image.Image,
     params: FrameParams,
@@ -505,7 +461,7 @@ def _try_font(px: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return _get_font(px)
 
 
-def _draw_label(  # noqa: PLR0913
+def draw_label(  # noqa: PLR0913
     canvas: Image.Image,
     center: tuple[int, int],
     text: str,
@@ -525,7 +481,7 @@ def _draw_label(  # noqa: PLR0913
     draw.text((x, y), text, font=font, fill=fill)
 
 
-def _make_wall_canvas(
+def make_wall_canvas(
     size: tuple[int, int],
     color: _RGB,
     *,
@@ -596,312 +552,3 @@ def _add_frame_texture(
         blended_rgba.putalpha(alpha)
         return blended_rgba
     return blended_rgb
-
-
-def make_horizontal_grid(  # noqa: PLR0913
-    images: Sequence[Image.Image],
-    *,
-    target_height: int | None = _DEFAULT_HEIGHT,
-    target_size: tuple[int, int] | None = None,
-    pad: int = _DEFAULT_PAD,
-    bg_color: _RGB = COLOR_WHITE,
-    border_px: int = 0,
-) -> Image.Image:
-    """
-    Build a horizontal grid with N panels.
-
-    If target_size is given, scale the composed content to fit within
-    that size and center on a canvas of exact dimensions. Stretching
-    above 1.0 scale is not performed. If only target_height is given,
-    scale panels to that height, keep aspect, and size tightly.
-    """
-    if not images:
-        msg = "No images provided"
-        raise ValueError(msg)
-
-    rgb_imgs = [_to_rgb(im, bg_color=bg_color) for im in images]
-    work_imgs = _scale_images_to_target(rgb_imgs, target_height, target_size)
-    work_imgs = [_draw_border(im, border_px) for im in work_imgs]
-
-    inner_gap = pad
-    outer_pad = pad
-    content_w, content_h, _, _ = _content_dimensions(work_imgs, inner_gap)
-    tight_w = content_w + 2 * outer_pad
-    tight_h = content_h + 2 * outer_pad
-
-    # canvas sizing and optional downscale
-    if target_size is None:
-        canvas_w, canvas_h = tight_w, tight_h
-    else:
-        work_imgs, content_w, content_h = _scale_images_to_fit_canvas(
-            work_imgs, inner_gap, tight_w, tight_h, target_size,
-        )
-        canvas_w, canvas_h = target_size
-
-    # compose
-    canvas = Image.new("RGB", (canvas_w, canvas_h), bg_color)
-    if target_size is None:
-        start_x = outer_pad
-        y = outer_pad
-    else:
-        start_x = (canvas_w - content_w) // 2
-        y = (canvas_h - content_h) // 2
-
-    _paste_horizontally(canvas, work_imgs, inner_gap, (start_x, y), content_h)
-    return canvas
-
-
-def save_comparison_grid(  # noqa: PLR0913
-    content_path: Path,
-    style_path: Path,
-    result_path: Path,
-    out_path: Path,
-    *,
-    target_height: int | None = _DEFAULT_HEIGHT,
-    target_size: tuple[int, int] | None = None,
-    pad: int = _DEFAULT_PAD,
-    bg_color: _RGB = COLOR_WHITE,
-    border_px: int = 0,
-) -> Path:
-    """Open three images, build a grid, and save to out_path."""
-    if not isinstance(out_path, Path):
-        msg = "out_path must be a pathlib.Path"
-        raise TypeError(msg)
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with Image.open(content_path) as content, \
-         Image.open(style_path) as style, \
-         Image.open(result_path) as result:
-
-        grid = make_horizontal_grid(
-            [_to_rgb(content, bg_color=bg_color),
-             _to_rgb(style, bg_color=bg_color),
-             _to_rgb(result, bg_color=bg_color)],
-            target_height=target_height,
-            target_size=target_size,
-            pad=pad,
-            bg_color=bg_color,
-            border_px=border_px,
-        )
-        grid.save(out_path, format="PNG")
-    return out_path
-
-
-def default_comparison_name(
-    content_path: Path,
-    style_path: Path,
-    out_dir: Path,
-) -> Path:
-    """Build a deterministic filename for the comparison image."""
-    def stem(p: Path) -> str:
-        return p.stem.replace(" ", "_")
-
-    name = f"comparison_{stem(content_path)}_x_{stem(style_path)}.png"
-    return out_dir / name
-
-
-def _layout_two_across(
-    w: int,
-    h: int,
-    *,
-    lr_margin: int,
-    tb_margin: int,
-    gap_frac: float,
-) -> list[Rect]:
-    """Return outer boxes for two side by side panels."""
-    gap = int(w * gap_frac)
-    avail_w = w - 2 * lr_margin - gap
-    avail_h = h - 2 * tb_margin
-    panel_w = avail_w // 2
-    panel_h = avail_h
-    y0 = (h - panel_h) // 2
-
-    left = Rect(lr_margin, y0, lr_margin + panel_w, y0 + panel_h)
-    right = Rect(lr_margin + panel_w + gap, y0,
-                 lr_margin + panel_w + gap + panel_w, y0 + panel_h)
-    return [left, right]
-
-
-def _layout_stacked_left(  # noqa: PLR0913
-    w: int,
-    h: int,
-    *,
-    lr_margin: int,
-    tb_margin: int,
-    gap_frac: float,
-    left_col_frac: float,
-) -> list[Rect]:
-    """Return outer boxes for stacked left plus tall right panel."""
-    gap = int(w * gap_frac)
-    col_w = int((w - 2 * lr_margin - gap) * left_col_frac)
-    right_w = w - 2 * lr_margin - gap - col_w
-    avail_h = h - 2 * tb_margin
-    top_h = (avail_h - gap) // 2
-    bottom_h = avail_h - gap - top_h
-
-    x0 = lr_margin
-    y0 = tb_margin
-    return [
-        Rect(x0, y0, x0 + col_w, y0 + top_h),
-        Rect(x0, y0 + top_h + gap, x0 + col_w, y0 + top_h + gap + bottom_h),
-        Rect(x0 + col_w + gap, y0, x0 + col_w + gap + right_w, y0 + avail_h),
-    ]
-
-
-def _render_panels(  # noqa: PLR0913
-    canvas: Image.Image,
-    images: list[Image.Image],
-    boxes: list[Rect],
-    fparams: FrameParams,
-    *,
-    wall_color: _RGB,
-    two_image: bool,
-) -> list[tuple[int, int]]:
-    """Render framed panels and paste to canvas. Return label anchors."""
-    anchors: list[tuple[int, int]] = []
-    for idx, (im, box) in enumerate(zip(images, boxes, strict=True)):
-        w_box, h_box = box.size()
-        local_params = fparams
-        if two_image or idx == _RESULT_IDX:
-            local_params = replace(fparams, fit_mode="contain")
-
-        panel, anchor = build_framed_panel(
-            _to_rgb(im, bg_color=COLOR_BLACK),
-            (w_box, h_box),
-            local_params,
-            wall_color=wall_color,
-        )
-        anchors.append((box.x0 + anchor[0], box.y0 + anchor[1]))
-        canvas.paste(panel, (box.x0, box.y0))
-    return anchors
-
-
-def make_gallery_comparison(  # noqa: PLR0913
-    content: Image.Image,
-    style: Image.Image,
-    result: Image.Image | None,
-    *,
-    target_size: tuple[int, int] = RESOLUTION_FULL_HD,
-    layout: LayoutName = "gallery-stacked-left",
-    wall_color: _RGB = COLOR_GREY,
-    frame: FrameParams | None = None,
-    labels: tuple[str, str, str] = ("Content", "Style", "Final"),
-    left_right_wall_margin: int = 48,
-    top_bottom_wall_margin: int = 48,
-) -> Image.Image:
-    """
-    Build the gallery wall comparison image.
-
-    Supports two panel and three panel layouts. If result is None the
-    two panel layout is used regardless of layout name.
-    """
-    two_image = (result is None) or (layout == "gallery-two-across")
-
-    w, h = target_size
-    if w <= 0 or h <= 0:
-        msg = "target_size must be positive"
-        raise ValueError(msg)
-
-    # clamp texture strength into a safe range
-    fparams = frame or FrameParams()
-    if fparams.frame_texture_strength < 0:
-        fparams = replace(fparams, frame_texture_strength=0)
-    elif fparams.frame_texture_strength > _FRAME_TEXTURE_MAX:
-        fparams = replace(fparams, frame_texture_strength=_FRAME_TEXTURE_MAX)
-
-    wall = _make_wall_canvas((w, h), wall_color, vignette=True, noise=True)
-
-    # Layout outer boxes
-    if two_image:
-        boxes = _layout_two_across(
-            w, h, lr_margin=left_right_wall_margin,
-            tb_margin=top_bottom_wall_margin, gap_frac=_GAP_FRACTION,
-        )
-        imgs: list[Image.Image] = [content, style]
-        labs: tuple[str, ...] = labels[:2]
-        # Fit each panel by image aspect, include a small inset
-        boxes = [
-            _fit_box_by_inner_aspect(b, im, fparams, _RESULT_INSET_FRACTION)
-            for b, im in zip(boxes, imgs, strict=True)
-        ]
-    else:
-        boxes = _layout_stacked_left(
-            w, h, lr_margin=left_right_wall_margin,
-            tb_margin=top_bottom_wall_margin, gap_frac=_GAP_FRACTION,
-            left_col_frac=_LEFT_COL_FRACTION,
-        )
-        imgs = [content, style, result]  # type: ignore[list-item]
-        labs = labels
-        # Inset and fit the result column only
-        boxes[_RESULT_IDX] = _fit_box_by_inner_aspect(
-            boxes[_RESULT_IDX], imgs[_RESULT_IDX],
-            fparams, _RESULT_INSET_FRACTION,
-        )
-
-    # render and paste
-    canvas = wall.copy()
-    anchors = _render_panels(
-        canvas, imgs, boxes, fparams, wall_color=wall_color,
-        two_image=two_image,
-    )
-
-    # labels
-    if fparams.label is not None:
-        for text, center in zip(labs, anchors, strict=True):
-            _draw_label(
-                canvas,
-                center=center,
-                text=text,
-                px=fparams.label_px,
-                fill=fparams.label_fill,
-                y_offset=fparams.label_offset_px,
-            )
-
-    return canvas
-
-
-def save_gallery_comparison(  # noqa: PLR0913
-    content_path: Path,
-    style_path: Path,
-    result_path: Path | None,
-    out_path: Path,
-    *,
-    target_size: tuple[int, int] = RESOLUTION_FULL_HD,
-    layout: LayoutName = "gallery-stacked-left",
-    wall_color: _RGB = COLOR_GREY,
-    frame_tone: str = "gold",
-    show_labels: bool = True,
-) -> Path:
-    """Open images, build a gallery wall, and save to out_path."""
-    if not isinstance(out_path, Path):
-        msg = "out_path must be a pathlib.Path"
-        raise TypeError(msg)
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # noinspection PyAbstractClass
-    with ExitStack() as stack:
-        content = stack.enter_context(Image.open(content_path))
-        style = stack.enter_context(Image.open(style_path))
-        result = (
-            stack.enter_context(Image.open(result_path))
-            if result_path
-            else None
-        )
-
-        fparams = FrameParams(
-            frame_tone=frame_tone,
-            label="on" if show_labels else None,
-        )
-        img = make_gallery_comparison(
-            content=content,
-            style=style,
-            result=result,
-            target_size=target_size,
-            layout=layout,
-            wall_color=wall_color,
-            frame=fparams,
-        )
-        img.save(out_path, format="PNG")
-    return out_path
