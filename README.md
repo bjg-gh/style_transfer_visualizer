@@ -30,7 +30,8 @@ A command-line tool that applies neural style transfer to images using PyTorch. 
 ---
 
 ## Installation
-Set up your environment with uv (https://docs.astral.sh/uv/) and Python 3.12:
+
+Set up your environment with uv (<https://docs.astral.sh/uv/>) and Python 3.12:
 
 ```bash
 uv venv --python=3.12
@@ -46,6 +47,7 @@ Run tests:
 ```bash
 uv run pytest
 ```
+
 Open `htmlcov/index.html` in your browser for a visual coverage report.
 
 Run pre-commit hooks:
@@ -63,10 +65,13 @@ Run the tool from the command line:
 ```bash
 uv run style-visualizer --content path/to/content.jpg --style path/to/style.jpg
 ```
+
 Or with a config file:
+
 ```bash
 uv run style-visualizer --config config.toml
 ```
+
 ### Common Options
 
 - `--steps`, `--save-every`, `--style-w`, `--content-w`, `--lr`
@@ -84,6 +89,7 @@ uv run style-visualizer --config config.toml
 - `--log-every N` (log every N steps, default: 10)
 - `--metadata-title "Custom Title"` (override MP4 Title metadata)
 - `--metadata-artist "Custom Artist"` (override MP4 Artist metadata)
+
 ---
 
 ## Video Intro & Outro Segments
@@ -119,7 +125,7 @@ The Style Transfer Visualizer supports two methods for tracking loss metrics dur
 
 By default, all loss metrics (style, content, and total loss) are stored in memory. At the end of the run, a loss plot is generated using matplotlib and saved to the output directory:
 
-```
+```text
 loss_plot.png
 ```
 
@@ -168,39 +174,55 @@ step,style_loss,content_loss,total_loss
 
 ## Project Structure
 
-```
+```text
 style_transfer_visualizer/
-├── pyproject.toml                 # Project configuration
-├── config.toml                    # Example config
-├── src/
-│   └── style_transfer_visualizer/
-│       ├── cli.py                # CLI entry point
-│       ├── config.py
-│       ├── config_defaults.py
-│       ├── constants.py
-│       ├── core_model.py
-│       ├── image_io.py
-│       ├── logging_utils.py
-│       ├── loss_logger.py         # Handles CSV loss logging
-│       ├── main.py
-│       ├── optimization.py
-│       ├── types.py
-│       ├── utils.py
-│       └── video.py
-├── tests/
-│   ├── test_cli.py
-│   ├── test_config.py
-│   ├── test_core_model.py
-│   ├── test_image_io.py
-│   ├── test_main.py
-│   ├── test_optimization.py
-│   ├── test_utils.py
-│   ├── test_video.py
-│   └── conftest.py
-├── tools/
-│   └── compare_grid.py            # Standalone helper to build grid or gallery comparison images
-
+    pyproject.toml                 # Project configuration
+    config.toml                    # Example config
+    src/
+        style_transfer_visualizer/
+            cli.py                # CLI entry point
+            config.py
+            config_defaults.py
+            constants.py
+            core_model.py
+            image_grid/
+                __init__.py       # Compatibility re-exports for legacy imports
+                core.py           # Frame + rendering primitives
+                layouts.py        # Grid and gallery composition logic
+                naming.py         # Path building and file saving helpers
+            image_io.py
+            logging_utils.py
+            loss_logger.py        # Handles CSV loss logging
+            main.py
+            optimization.py
+            type_defs.py
+            utils.py
+            video.py
+    tests/
+        test_cli.py
+        test_config.py
+        test_core_model.py
+        test_image_grid.py
+        test_image_grid_modules.py
+        test_image_io.py
+        test_main.py
+        test_optimization.py
+        test_utils.py
+        test_video.py
+        conftest.py
+    tools/
+        compare_grid.py            # Standalone helper to build grid or gallery comparison images
 ```
+
+### Image Grid Modules
+
+The image comparison tooling now lives in a focused package:
+
+- `style_transfer_visualizer.image_grid.core` contains reusable rendering primitives (`FrameParams`, panel framing, wall textures).
+- `style_transfer_visualizer.image_grid.layouts` composes horizontal grids and gallery wall arrangements.
+- `style_transfer_visualizer.image_grid.naming` handles filename generation and convenience save helpers.
+
+Legacy imports that pointed to `style_transfer_visualizer.image_grid` continue to work via compatibility re-exports, but new code should prefer the dedicated submodules.
 
 ---
 
@@ -212,12 +234,12 @@ MIT License
 
 The command line interface now supports saving comparison images after a run.
 
-**Flags**
+### Flags
 
-* `--compare-inputs` saves a two panel gallery wall that compares Content and Style.
-* `--compare-result` saves a three panel gallery wall that compares Content, Style, and the stylized result. If the expected result image is not found, a warning is logged and the comparison is skipped.
+- `--compare-inputs` saves a two panel gallery wall that compares Content and Style.
+- `--compare-result` saves a three panel gallery wall that compares Content, Style, and the stylized result. If the expected result image is not found, a warning is logged and the comparison is skipped.
 
-**Examples on Windows**
+## Examples on Windows
 
 ```bat
 uv run style-visualizer --content C:\img\cat.jpg --style C:\img\wave.jpg --steps 400 --compare-inputs
@@ -229,9 +251,9 @@ uv run style-visualizer --content C:\img\cat.jpg --style C:\img\wave.jpg --steps
 
 Notes
 
-* Output is saved as a PNG inside the directory provided by `--output`.
-* File naming uses canonical stems derived from the content and style file names.
-* For complete control over layout, wall color, and sizing, see the Tools section below.
+- Output is saved as a PNG inside the directory provided by `--output`.
+- File naming uses canonical stems derived from the content and style file names.
+- For complete control over layout, wall color, and sizing, see the Tools section below.
 
 ## Tools
 
@@ -241,27 +263,27 @@ The `tools` directory contains utilities that work with the project image grid a
 
 A standalone runner for building comparison images.
 
-**Modes**
+### Modes
 
-* Grid mode when no layout is provided. This requires a result image and produces a tight three image grid.
-* Gallery mode when a layout is provided. This produces a gallery wall with either two or three framed panels.
+- Grid mode when no layout is provided. This requires a result image and produces a tight three image grid.
+- Gallery mode when a layout is provided. This produces a gallery wall with either two or three framed panels.
 
-**Arguments**
+### Arguments
 
-* `--content PATH` path to the content image
-* `--style PATH` path to the style image
-* `--result PATH` path to an existing stylized result image. Required in grid mode. Ignored when layout is gallery two across
-* `--out PATH` output path. If omitted, a default name is derived from inputs. The suffix is normalized to `.png`
-* `--target-height N` grid mode scale height
-* `--target-size WxH` gallery mode canvas size, for example `1920x1080`
-* `--pad N` pixel padding for grid mode
-* `--border-px N` optional border width for grid mode
-* `--layout NAME` gallery layout. One of `gallery-two-across`, `gallery-stacked-left`
-* `--wall #rrggbb` gallery wall color as a hex string, default `#3c434a`
-* `--frame-style NAME` gallery frame tone preset. One of `gold`, `oak`, `black`
-* `--show-labels` draw Content, Style, and Final labels on gallery frames
+- `--content PATH` path to the content image
+- `--style PATH` path to the style image
+- `--result PATH` path to an existing stylized result image. Required in grid mode. Ignored when layout is gallery two across
+- `--out PATH` output path. If omitted, a default name is derived from inputs. The suffix is normalized to `.png`
+- `--target-height N` grid mode scale height
+- `--target-size WxH` gallery mode canvas size, for example `1920x1080`
+- `--pad N` pixel padding for grid mode
+- `--border-px N` optional border width for grid mode
+- `--layout NAME` gallery layout. One of `gallery-two-across`, `gallery-stacked-left`
+- `--wall #rrggbb` gallery wall color as a hex string, default `#3c434a`
+- `--frame-style NAME` gallery frame tone preset. One of `gold`, `oak`, `black`
+- `--show-labels` draw Content, Style, and Final labels on gallery frames
 
-**Examples on Windows**
+### Grid Examples on Windows
 
 Grid mode with three images
 
@@ -306,14 +328,14 @@ uns\stylized_content_x_style.png ^
 uns\gallery_result.png
 ```
 
-**Behavior**
+### Behavior
 
-* If `--out` is omitted, a default name is generated from the content and style file stems.
-* If `--out` does not end with `.png`, it is rewritten to `.png`.
-* In gallery mode with layout gallery two across, any `--result` value is ignored.
+- If `--out` is omitted, a default name is generated from the content and style file stems.
+- If `--out` does not end with `.png`, it is rewritten to `.png`.
+- In gallery mode with layout gallery two across, any `--result` value is ignored.
 
 ## Additional Tools
 
-```
+```csv
 tools    compare_grid.py    Standalone helper to build grid or gallery comparison images
 ```

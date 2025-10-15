@@ -18,7 +18,7 @@ from style_transfer_visualizer.constants import (
     VIDEO_QUALITY_MAX,
     VIDEO_QUALITY_MIN,
 )
-from style_transfer_visualizer.image_grid import (
+from style_transfer_visualizer.image_grid.naming import (
     default_comparison_name,
     save_gallery_comparison,
 )
