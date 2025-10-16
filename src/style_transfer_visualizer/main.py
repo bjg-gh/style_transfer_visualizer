@@ -78,15 +78,16 @@ def style_transfer(
             intro_last_frame, intro_crossfade_frames = intro_info
 
     # Run optimization
-    input_img, loss_metrics, elapsed = stv_optimizer.run_optimization_loop(
+    runner = stv_optimizer.OptimizationRunner(
         model,
         input_img,
-        optimizer,
         config,
-        video_writer,
+        optimizer=optimizer,
+        video_writer=video_writer,
         intro_last_frame=intro_last_frame,
         intro_crossfade_frames=intro_crossfade_frames,
     )
+    input_img, loss_metrics, elapsed = runner.run()
 
     if video_writer and config.video.final_frame_compare:
         with torch.no_grad():

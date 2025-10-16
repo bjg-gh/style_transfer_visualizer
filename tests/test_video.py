@@ -403,6 +403,10 @@ def test_append_final_comparison_frame_appends_when_enabled(
         last_frame,
     )
 
+    expected_timelapse_hold = max(
+        stv_video.FINAL_TIMELAPSE_MIN_FRAMES,
+        round(cfg.fps * stv_video.FINAL_TIMELAPSE_HOLD_SECONDS),
+    )
     expected_crossfade = max(
         1,
         min(
@@ -414,8 +418,15 @@ def test_append_final_comparison_frame_appends_when_enabled(
         stv_video.FINAL_COMPARISON_MIN_FRAMES,
         round(cfg.fps * cfg.outro_duration_seconds),
     )
-    assert len(writer.frames) == expected_crossfade + expected_hold
+    assert len(writer.frames) == (
+        expected_timelapse_hold + expected_crossfade + expected_hold
+    )
     assert all(frame.shape == last_frame.shape for frame in writer.frames)
+    # Ensure timelapse hold frames precede the crossfade.
+    np.testing.assert_array_equal(
+        writer.frames[0],
+        writer.frames[expected_timelapse_hold - 1],
+    )
     # The tail frames should match the final comparison image exactly.
     np.testing.assert_array_equal(
         writer.frames[-1],

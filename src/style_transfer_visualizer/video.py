@@ -74,6 +74,8 @@ OUTRO_CROSSFADE_SECONDS = 0.5
 OUTRO_MAX_CROSSFADE_FRAMES = 12
 OUTRO_MIN_DIM = 512
 FINAL_COMPARISON_MIN_FRAMES = 1
+FINAL_TIMELAPSE_HOLD_SECONDS = 1.0
+FINAL_TIMELAPSE_MIN_FRAMES = 1
 _FRAME_NDIMS = 3
 _RGB_CHANNELS = 3
 _SIZE_TUPLE_LEN = 2
@@ -285,6 +287,11 @@ def append_final_comparison_frame(
         target_width=target_width,
         target_height=target_height,
     )
+
+    timelapse_hold_raw = round(config.fps * FINAL_TIMELAPSE_HOLD_SECONDS)
+    timelapse_hold_frames = max(FINAL_TIMELAPSE_MIN_FRAMES, timelapse_hold_raw)
+    for _ in range(timelapse_hold_frames):
+        writer.append_data(last_rgb)
 
     crossfade_raw = round(config.fps * OUTRO_CROSSFADE_SECONDS)
     crossfade_frames = max(1, min(crossfade_raw, OUTRO_MAX_CROSSFADE_FRAMES))
