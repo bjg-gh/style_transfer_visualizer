@@ -7,7 +7,7 @@ import torch
 import style_transfer_visualizer.core_model as stv_core_model
 import style_transfer_visualizer.image_io as stv_image_io
 import style_transfer_visualizer.optimization as stv_optimizer
-import style_transfer_visualizer.utils as stv_utils
+import style_transfer_visualizer.runtime as stv_runtime
 import style_transfer_visualizer.video as stv_video
 from style_transfer_visualizer.config import StyleTransferConfig
 from style_transfer_visualizer.type_defs import (
@@ -22,8 +22,8 @@ def style_transfer(
 ) -> torch.Tensor:
     """Top level style transfer entry point."""
     # Validate inputs
-    stv_utils.validate_input_paths(paths.content_path, paths.style_path)
-    stv_utils.validate_parameters(config.video.quality)
+    stv_runtime.validate_input_paths(paths.content_path, paths.style_path)
+    stv_runtime.validate_parameters(config.video.quality)
 
     # Adjust for final-only mode
     if config.video.final_only:
@@ -31,8 +31,8 @@ def style_transfer(
         config.video.save_every = config.optimization.steps + 1
 
     # Setup environment
-    stv_utils.setup_random_seed(config.optimization.seed)
-    device = stv_utils.setup_device(config.hardware.device)
+    stv_runtime.setup_random_seed(config.optimization.seed)
+    device = stv_runtime.setup_device(config.hardware.device)
 
     # Load and preprocess input images
     content_img = stv_image_io.load_image_to_tensor(
@@ -55,7 +55,7 @@ def style_transfer(
     )
 
     # Prepare output paths
-    output_path = stv_utils.setup_output_directory(config.output.output)
+    output_path = stv_runtime.setup_output_directory(config.output.output)
     content_path = Path(paths.content_path)
     style_path = Path(paths.style_path)
     content_name = content_path.stem
@@ -127,10 +127,10 @@ def style_transfer(
         plot_losses=config.output.plot_losses,
     )
 
-    stv_utils.save_outputs(
+    stv_runtime.save_outputs(
         input_img,
         loss_metrics,
-        Path(config.output.output),
+        output_path,
         elapsed,
         save_opts,
     )

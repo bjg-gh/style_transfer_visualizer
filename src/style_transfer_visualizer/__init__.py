@@ -5,7 +5,6 @@ Modules:
     core_model         — Model construction and initialization
     image_io           — Image loading, preprocessing, normalization
     optimization       — Optimization loop and training step logic
-    utils              — Device setup, seeding, validation, plotting
     video              — Timelapse video writer configuration
     cli                — Command-line interface and argument parsing
     config             — Typed configuration schema and TOML loader

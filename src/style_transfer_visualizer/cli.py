@@ -23,8 +23,10 @@ from style_transfer_visualizer.image_grid.naming import (
     save_gallery_comparison,
 )
 from style_transfer_visualizer.logging_utils import logger
+from style_transfer_visualizer.runtime.output import (
+    stylized_image_path_from_paths,
+)
 from style_transfer_visualizer.type_defs import InputPaths, LayoutName
-from style_transfer_visualizer.utils import stylized_image_path_from_paths
 
 
 def build_arg_parser() -> argparse.ArgumentParser:

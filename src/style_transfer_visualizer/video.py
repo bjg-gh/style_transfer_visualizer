@@ -19,7 +19,7 @@ from style_transfer_visualizer.image_grid.core import FrameParams
 from style_transfer_visualizer.image_grid.layouts import (
     make_gallery_comparison,
 )
-from style_transfer_visualizer.utils import resolve_project_version
+from style_transfer_visualizer.runtime.version import resolve_project_version
 
 if TYPE_CHECKING:  # pragma: no cover
     from pathlib import Path

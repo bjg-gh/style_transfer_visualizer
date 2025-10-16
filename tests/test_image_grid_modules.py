@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import Image  # noqa: TC002
+from PIL import Image
 
 from style_transfer_visualizer.constants import COLOR_GREY, COLOR_WHITE
 from style_transfer_visualizer.image_grid import core, layouts, naming
