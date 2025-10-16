@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "style-transfer-visualizer"
-version = "1.2.0-dev3"
+version = "1.2.0-dev4"
 description = "A command-line tool for neural style transfer with PyTorch"
 authors = [{ name = "Ben Goldsmith" }]
 readme = "README.md"
@@ -84,7 +84,18 @@ select = ["ALL"]
 ignore = ["D107", "D203", "D212"]
 
 [tool.ruff.lint.extend-per-file-ignores]
-"tests/**/*.py" = ["S101"]
+"tests/**/*.py" = [
+    "S101",
+    "S311",
+    "D",
+    "ARG",
+    "TRY",
+    "EM",
+    "E501",
+    "UP035",
+    "TC",
+    "INP001",
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["style_transfer_visualizer"]

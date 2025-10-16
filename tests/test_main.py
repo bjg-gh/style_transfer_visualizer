@@ -21,7 +21,7 @@ import style_transfer_visualizer.core_model as stv_core_model
 import style_transfer_visualizer.image_io as stv_image_io
 import style_transfer_visualizer.main as stv_main
 import style_transfer_visualizer.optimization as stv_optimization
-import style_transfer_visualizer.utils as stv_utils
+import style_transfer_visualizer.runtime as stv_runtime
 import style_transfer_visualizer.video as stv_video
 from style_transfer_visualizer.config import StyleTransferConfig, VideoConfig
 from style_transfer_visualizer.type_defs import InputPaths, SaveOptions
@@ -65,14 +65,14 @@ def test_style_transfer_minimal(monkeypatch: MonkeyPatch) -> None:
     )
 
     # Filesystem helpers
-    monkeypatch.setattr(stv_utils, "save_outputs", lambda *_a, **_k: None)
+    monkeypatch.setattr(stv_runtime, "save_outputs", lambda *_a, **_k: None)
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "setup_output_directory",
         lambda _x: Path("mock_output"),
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "validate_input_paths",
         lambda *_a, **_k: None,
     )
@@ -120,16 +120,16 @@ def test_style_transfer_no_plot(monkeypatch: MonkeyPatch) -> None:
         "run_optimization_loop",
         lambda *_a, **_kw: (dummy_tensor.clone(), {"loss": [1.0]}, 3.14),
     )
-    monkeypatch.setattr(stv_utils, "save_outputs", lambda *_a, **_kw: None)
+    monkeypatch.setattr(stv_runtime, "save_outputs", lambda *_a, **_kw: None)
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "setup_output_directory",
         lambda _: Path("mock_output").resolve().mkdir(
             parents=True, exist_ok=True,
         )
         or Path("mock_output"),
     )
-    monkeypatch.setattr(stv_utils, "validate_input_paths",
+    monkeypatch.setattr(stv_runtime, "validate_input_paths",
                         lambda *_a, **_kw: None)
     monkeypatch.setattr(stv_video, "setup_video_writer",
                         lambda *_a, **_k: None)
@@ -241,32 +241,32 @@ def test_style_transfer_passes_intro_info(
     dummy_tensor = torch.rand(1, 3, 64, 64)
 
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "validate_input_paths",
         lambda *_a, **_k: None,
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "validate_parameters",
         lambda *_a, **_k: None,
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "setup_random_seed",
         lambda *_a, **_k: None,
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "setup_device",
         lambda *_a, **_k: torch.device("cpu"),
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "setup_output_directory",
         lambda _p: Path(output_dir),
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "save_outputs",
         lambda *_a, **_k: None,
     )
@@ -355,32 +355,32 @@ def test_style_transfer_handles_missing_intro_segment(
     dummy_tensor = torch.rand(1, 3, 64, 64)
 
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "validate_input_paths",
         lambda *_a, **_k: None,
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "validate_parameters",
         lambda *_a, **_k: None,
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "setup_random_seed",
         lambda *_a, **_k: None,
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "setup_device",
         lambda *_a, **_k: torch.device("cpu"),
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "setup_output_directory",
         lambda _p: Path(output_dir),
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "save_outputs",
         lambda *_a, **_k: None,
     )
@@ -465,32 +465,32 @@ def test_style_transfer_appends_final_comparison_frame(
     dummy_tensor = torch.rand(1, 3, 64, 64)
 
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "validate_input_paths",
         lambda *_a, **_k: None,
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "validate_parameters",
         lambda *_a, **_k: None,
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "setup_random_seed",
         lambda *_a, **_k: None,
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "setup_device",
         lambda *_a, **_k: torch.device("cpu"),
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "setup_output_directory",
         lambda _p: Path(output_dir),
     )
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "save_outputs",
         lambda *_a, **_k: None,
     )
@@ -582,7 +582,7 @@ def test_final_only_disables_video(
 ) -> None:
     """Test final_only mode disables video even if requested."""
     monkeypatch.setattr(
-        stv_utils,
+        stv_runtime,
         "validate_input_paths",
         lambda *_args, **_kwargs: None,
     )
@@ -659,7 +659,7 @@ def apply_mock(monkeypatch: MonkeyPatch) -> None:
             video_path = output_dir / save_opts.video_name
             video_path.write_text("mock video")  # Avoid bytes warning
 
-    monkeypatch.setattr(stv_utils, "save_outputs", mock_save)
+    monkeypatch.setattr(stv_runtime, "save_outputs", mock_save)
 
 
 def setup_test_directory(base_dir: str, sub_name: str) -> str:
