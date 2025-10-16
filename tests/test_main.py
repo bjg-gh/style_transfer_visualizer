@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pytest
@@ -58,10 +58,9 @@ def test_style_transfer_minimal(monkeypatch: MonkeyPatch) -> None:
     )
 
     # Optimization loop returns a stable output and loss dict
-    monkeypatch.setattr(
-        stv_optimization,
-        "run_optimization_loop",
-        lambda *_a, **_kw: (dummy_tensor.clone(), {"loss": [1.0]}, 3.14),
+    patch_runner(
+        monkeypatch,
+        run_result=(dummy_tensor.clone(), {"loss": [1.0]}, 3.14),
     )
 
     # Filesystem helpers
@@ -115,10 +114,9 @@ def test_style_transfer_no_plot(monkeypatch: MonkeyPatch) -> None:
         "prepare_model_and_input",
         lambda *_a, **_kw: ("model", dummy_tensor.clone(), "optimizer"),
     )
-    monkeypatch.setattr(
-        stv_optimization,
-        "run_optimization_loop",
-        lambda *_a, **_kw: (dummy_tensor.clone(), {"loss": [1.0]}, 3.14),
+    patch_runner(
+        monkeypatch,
+        run_result=(dummy_tensor.clone(), {"loss": [1.0]}, 3.14),
     )
     monkeypatch.setattr(stv_runtime, "save_outputs", lambda *_a, **_kw: None)
     monkeypatch.setattr(
@@ -283,22 +281,19 @@ def test_style_transfer_passes_intro_info(
 
     captured: dict[str, object] = {}
 
-    def fake_run(
-        _model: object,
-        input_img: torch.Tensor,
-        _optimizer: object,
-        _config: StyleTransferConfig,
-        video_writer: object,
-        *,
-        intro_last_frame: np.ndarray | None,
-        intro_crossfade_frames: int,
+    def init_hook(
+        args: tuple[object, ...],
+        kwargs: dict[str, object],
     ) -> tuple[torch.Tensor, dict[str, list[float]], float]:
-        captured["writer"] = video_writer
-        captured["intro_last_frame"] = intro_last_frame
-        captured["intro_crossfade_frames"] = intro_crossfade_frames
+        input_img = cast(torch.Tensor, args[1])
+        captured["writer"] = kwargs.get("video_writer")
+        captured["intro_last_frame"] = kwargs.get("intro_last_frame")
+        captured["intro_crossfade_frames"] = kwargs.get(
+            "intro_crossfade_frames",
+        )
         return input_img, {"loss": []}, 0.0
 
-    monkeypatch.setattr(stv_optimization, "run_optimization_loop", fake_run)
+    patch_runner(monkeypatch, init_hook=init_hook)
 
     class StubWriter:
         def __init__(self) -> None:
@@ -397,22 +392,19 @@ def test_style_transfer_handles_missing_intro_segment(
 
     captured: dict[str, object] = {}
 
-    def fake_run(
-        _model: object,
-        input_img: torch.Tensor,
-        _optimizer: object,
-        _config: StyleTransferConfig,
-        video_writer: object,
-        *,
-        intro_last_frame: np.ndarray | None,
-        intro_crossfade_frames: int,
+    def init_hook(
+        args: tuple[object, ...],
+        kwargs: dict[str, object],
     ) -> tuple[torch.Tensor, dict[str, list[float]], float]:
-        captured["writer"] = video_writer
-        captured["intro_last_frame"] = intro_last_frame
-        captured["intro_crossfade_frames"] = intro_crossfade_frames
+        input_img = cast(torch.Tensor, args[1])
+        captured["writer"] = kwargs.get("video_writer")
+        captured["intro_last_frame"] = kwargs.get("intro_last_frame")
+        captured["intro_crossfade_frames"] = kwargs.get(
+            "intro_crossfade_frames",
+        )
         return input_img, {"loss": []}, 0.0
 
-    monkeypatch.setattr(stv_optimization, "run_optimization_loop", fake_run)
+    patch_runner(monkeypatch, init_hook=init_hook)
 
     class StubWriter:
         def __init__(self) -> None:
@@ -505,10 +497,9 @@ def test_style_transfer_appends_final_comparison_frame(
         lambda *_a, **_k: ("model", dummy_tensor.clone(), "optimizer"),
     )
 
-    monkeypatch.setattr(
-        stv_optimization,
-        "run_optimization_loop",
-        lambda *_a, **_k: (dummy_tensor.clone(), {"loss": []}, 0.0),
+    patch_runner(
+        monkeypatch,
+        run_result=(dummy_tensor.clone(), {"loss": []}, 0.0),
     )
 
     class StubWriter:
@@ -608,17 +599,11 @@ def test_final_only_disables_video(
     ).exists()
 
 
-def create_mock_optimization() -> Callable[
-    ..., tuple[torch.Tensor, dict[str, list[float]], float],
-]:
-    """
-    Return a mock optimization loop result.
-
-    Used to simulate the output of run_optimization_loop().
-    """
-    def mock_run(
-        *_: object,
-        **__: object,
+def apply_mock(monkeypatch: MonkeyPatch) -> None:
+    """Patch optimization and output functions with test mocks."""
+    def init_hook(
+        *_args: object,
+        **_kwargs: object,
     ) -> tuple[torch.Tensor, dict[str, list[float]], float]:
         img = torch.rand(1, 3, 100, 100)
         losses = {
@@ -628,16 +613,7 @@ def create_mock_optimization() -> Callable[
         }
         return img, losses, 0.1
 
-    return mock_run
-
-
-def apply_mock(monkeypatch: MonkeyPatch) -> None:
-    """Patch optimization and output functions with test mocks."""
-    monkeypatch.setattr(
-        stv_optimization,
-        "run_optimization_loop",
-        create_mock_optimization(),
-    )
+    patch_runner(monkeypatch, init_hook=lambda args, kwargs: init_hook())
 
     def mock_save(
         _input_img: torch.Tensor,
@@ -669,3 +645,33 @@ def setup_test_directory(base_dir: str, sub_name: str) -> str:
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True)
     return str(out_dir)
+
+
+def patch_runner(
+    monkeypatch: MonkeyPatch,
+    *,
+    run_result: tuple[torch.Tensor, dict[str, list[float]], float] | None = None,
+    init_hook: Callable[
+        [tuple[object, ...], dict[str, object]],
+        tuple[torch.Tensor, dict[str, list[float]], float] | None,
+    ] | None = None,
+) -> None:
+    """
+    Patch OptimizationRunner with a stub returning a predictable result.
+    """
+
+    class FakeRunner:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self._result = run_result
+            if init_hook is not None:
+                hook_result = init_hook(args, kwargs)
+                if hook_result is not None:
+                    self._result = hook_result
+
+        def run(self) -> tuple[torch.Tensor, dict[str, list[float]], float]:
+            if self._result is None:
+                msg = "No run result configured for FakeRunner."
+                raise RuntimeError(msg)
+            return self._result
+
+    monkeypatch.setattr(stv_optimization, "OptimizationRunner", FakeRunner)

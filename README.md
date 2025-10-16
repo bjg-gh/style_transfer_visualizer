@@ -105,9 +105,11 @@ The intro matches the `--compare-inputs` gallery layout and:
 - Can be disabled entirely with `--no-intro` if you prefer to jump straight to
   the optimization timelapse.
 
-After the final optimization frame the video crossfades into a gallery-style
-comparison of the content, style, and result images:
+After the final optimization frame the timelapse now holds on the stylized
+image for roughly one second before crossfading into a gallery-style comparison
+of the content, style, and result images:
 
+- Holds the stylized frame on screen momentarily before dissolving into the outro grid.
 - Uses the same stacked layout as `--compare-result` with labels and frames.
 - Holds for `--outro-duration` seconds (default `10`) before the video ends.
 - Disable it with `--no-final-frame-compare` to retain the original ending.
@@ -178,8 +180,10 @@ step,style_loss,content_loss,total_loss
 style_transfer_visualizer/
     pyproject.toml                 # Project configuration
     config.toml                    # Example config
+    uv.lock                        # Reproducible dependency lockfile
     src/
         style_transfer_visualizer/
+            __init__.py
             cli.py                # CLI entry point
             config.py
             config_defaults.py
@@ -194,22 +198,42 @@ style_transfer_visualizer/
             logging_utils.py
             loss_logger.py        # Handles CSV loss logging
             main.py
-            optimization.py
+            optimization.py       # OptimizationRunner orchestrating the training loop
+            runtime/
+                __init__.py
+                device.py         # Device selection helpers
+                output.py         # Final save/serialization logic
+                validation.py     # Input validation utilities
+                version.py        # Version resolution helpers
             type_defs.py
             utils.py
             video.py
+            visualization/
+                __init__.py
+                metrics.py        # Loss plotting helpers
     tests/
+        __init__.py
+        conftest.py
         test_cli.py
+        test_compare_grid.py
         test_config.py
         test_core_model.py
         test_image_grid.py
         test_image_grid_modules.py
         test_image_io.py
+        test_logging_utils.py
+        test_loss_logger.py
         test_main.py
         test_optimization.py
         test_utils.py
         test_video.py
-        conftest.py
+        runtime/
+            test_device.py
+            test_output.py
+            test_validation.py
+            test_version.py
+        visualization/
+            test_metrics.py
     tools/
         compare_grid.py            # Standalone helper to build grid or gallery comparison images
 ```
