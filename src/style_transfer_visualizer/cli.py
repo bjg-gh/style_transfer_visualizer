@@ -4,8 +4,6 @@ import argparse
 import sys
 from pathlib import Path
 
-from PIL import Image
-
 import style_transfer_visualizer.config as stv_config
 import style_transfer_visualizer.main as stv_main
 from style_transfer_visualizer.config_defaults import (
@@ -14,19 +12,15 @@ from style_transfer_visualizer.config_defaults import (
     DEFAULT_VIDEO_OUTRO_DURATION,
 )
 from style_transfer_visualizer.constants import (
-    COLOR_GREY,
     VIDEO_QUALITY_MAX,
     VIDEO_QUALITY_MIN,
 )
-from style_transfer_visualizer.image_grid.naming import (
-    default_comparison_name,
-    save_gallery_comparison,
-)
 from style_transfer_visualizer.logging_utils import logger
-from style_transfer_visualizer.runtime.output import (
-    stylized_image_path_from_paths,
+from style_transfer_visualizer.runtime.comparison import (
+    ComparisonRequest,
+    render_requested_comparisons,
 )
-from style_transfer_visualizer.type_defs import InputPaths, LayoutName
+from style_transfer_visualizer.type_defs import InputPaths
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -262,183 +256,19 @@ def parse_int_list(s: str | list[int]) -> list[int]:
         A list of integers.
 
     """
-    if isinstance(s, list):
-        return s
-    return list(map(int, s.split(",")))
-
-
-def _apply_output_overrides(
-    cfg: stv_config.StyleTransferConfig,
-    args: argparse.Namespace,
-) -> None:
-    """Apply CLI overrides for the [output] section."""
-    if hasattr(args, "output"):
-        cfg.output.output = args.output
-    if hasattr(args, "log_every"):
-        cfg.output.log_every = args.log_every
-    if hasattr(args, "log_loss"):
-        cfg.output.log_loss = args.log_loss  # type: ignore[attr-defined]
-    if getattr(args, "no_plot", False):
-        cfg.output.plot_losses = False
-
-
-def _apply_optimization_overrides(
-    cfg: stv_config.StyleTransferConfig,
-    args: argparse.Namespace,
-) -> None:
-    """Apply CLI overrides for the [optimization] section."""
-    if hasattr(args, "steps"):
-        cfg.optimization.steps = args.steps
-    if hasattr(args, "style_w"):
-        cfg.optimization.style_w = args.style_w
-    if hasattr(args, "content_w"):
-        cfg.optimization.content_w = args.content_w
-    if hasattr(args, "lr"):
-        cfg.optimization.lr = args.lr
-    if hasattr(args, "init_method"):
-        cfg.optimization.init_method = args.init_method
-    if hasattr(args, "seed"):
-        cfg.optimization.seed = args.seed
-    if getattr(args, "no_normalize", False):
-        cfg.optimization.normalize = False
-    if getattr(args, "style_layers", None):
-        cfg.optimization.style_layers = parse_int_list(args.style_layers)
-    if getattr(args, "content_layers", None):
-        cfg.optimization.content_layers = parse_int_list(args.content_layers)
-
-
-def _apply_video_overrides(
-    cfg: stv_config.StyleTransferConfig,
-    args: argparse.Namespace,
-) -> None:
-    """Apply CLI overrides for the [video] section."""
-    direct_attrs = {
-        "save_every": "save_every",
-        "fps": "fps",
-        "quality": "quality",
-        "metadata_title": "metadata_title",
-        "metadata_artist": "metadata_artist",
-    }
-    for cli_name, field_name in direct_attrs.items():
-        if hasattr(args, cli_name):
-            setattr(cfg.video, field_name, getattr(args, cli_name))
-
-    for flag, field_name in (
-        ("no_video", "create_video"),
-        ("no_intro", "intro_enabled"),
-    ):
-        if getattr(args, flag, False):
-            setattr(cfg.video, field_name, False)
-
-    if getattr(args, "final_only", False):
-        cfg.video.final_only = True
-    if hasattr(args, "intro_duration"):
-        cfg.video.intro_duration_seconds = max(args.intro_duration, 0.0)
-    if hasattr(args, "outro_duration"):
-        cfg.video.outro_duration_seconds = max(args.outro_duration, 0.0)
-    if hasattr(args, "final_frame_compare"):
-        cfg.video.final_frame_compare = args.final_frame_compare
-
-
-def _apply_hardware_overrides(
-    cfg: stv_config.StyleTransferConfig,
-    args: argparse.Namespace,
-) -> None:
-    """Apply CLI overrides for the [hardware] section."""
-    if hasattr(args, "device"):
-        cfg.hardware.device = args.device
-
-
-def _comparison_out_path(
-    out_dir: str,
-    content_p: Path,
-    style_p: Path,
-    *,
-    include_result: bool,
-) -> Path:
-    """
-    Build the deterministic comparison image path under out_dir.
-
-    The inputs-only variant uses the standard comparison name.
-    The result variant appends '_final' before the suffix.
-    """
-    base = default_comparison_name(content_p, style_p, Path(out_dir))
-    if include_result:
-        return base.parent / f"{base.stem}_final{base.suffix}"
-    return base
-
-
-def _save_comparison_image(
-    content_path: str,
-    style_path: str,
-    out_dir: str,
-    *,
-    include_result: bool,
-    result_path: str | None,
-) -> Path:
-    """
-    Render and save the gallery-wall comparison image under out_dir.
-
-    Labels are always enabled, frame tone is gold, wall uses default
-    project color, and target canvas equals the content image size.
-    """
-    content_p = Path(content_path)
-    style_p = Path(style_path)
-    result_p = Path(result_path) if include_result and result_path else None
-
-    # Canvas equals content size.
-    with Image.open(content_p) as im:
-        target_size = im.size
-
-    layout: LayoutName = (
-        "gallery-stacked-left" if include_result else "gallery-two-across"
-    )
-    out_path = _comparison_out_path(
-        out_dir, content_p, style_p, include_result=include_result,
-    )
-
-    out_path = save_gallery_comparison(
-        content_path=content_p,
-        style_path=style_p,
-        result_path=result_p,
-        out_path=out_path,
-        target_size=target_size,
-        layout=layout,
-        wall_color=COLOR_GREY,
-        frame_tone="gold",
-        show_labels=True,
-    )
-    logger.info("Saved comparison image: %s", out_path)
-    return out_path
-
-
-def _enforce_csv_plot_rule(cfg: stv_config.StyleTransferConfig) -> None:
-    """Disable plotting when CSV logging is enabled, with a warning."""
-    if getattr(cfg.output, "log_loss", None) and cfg.output.plot_losses:
-        logger.warning(
-            "Loss plotting is disabled because CSV logging is enabled. "
-            "Only loss CSV will be created.",
-        )
-        cfg.output.plot_losses = False
+    return stv_config.parse_int_list(s)
 
 
 def run_from_args(args: argparse.Namespace) -> None:
     """Run style transfer from command-line arguments."""
-    cfg = stv_config.StyleTransferConfig.model_validate({})  # defaults
+    base_cfg: stv_config.StyleTransferConfig | None = None
     if args.config:
-        cfg = stv_config.ConfigLoader.load(args.config)
+        base_cfg = stv_config.ConfigLoader.load(args.config)
         if args.validate_config_only:
             logger.info("Config %s validated successfully.", args.config)
             sys.exit(0)
 
-    # Apply CLI overrides by section
-    _apply_output_overrides(cfg, args)
-    _apply_optimization_overrides(cfg, args)
-    _apply_video_overrides(cfg, args)
-    _apply_hardware_overrides(cfg, args)
-
-    # CSV disables plot
-    _enforce_csv_plot_rule(cfg)
+    cfg = stv_config.build_config_from_cli(vars(args), base_config=base_cfg)
 
     paths = InputPaths(content_path=args.content, style_path=args.style)
     log_parameters(paths, cfg, args)
@@ -447,41 +277,15 @@ def run_from_args(args: argparse.Namespace) -> None:
 
     # Optionally write comparison images.
     if args.compare_inputs or args.compare_result:
-        out_dir = cfg.output.output
-        content_p = Path(args.content)
-        style_p = Path(args.style)
-
-        # inputs-only comparison
-        if args.compare_inputs:
-            _save_comparison_image(
-                content_path=str(content_p),
-                style_path=str(style_p),
-                out_dir=out_dir,
-                include_result=False,
-                result_path=None,
-            )
-
-        # content+style+result comparison
-        if args.compare_result:
-            result_p = stylized_image_path_from_paths(
-                Path(out_dir),
-                content_p,
-                style_p,
-            )
-            if not result_p.exists():
-                logger.warning(
-                    "Expected stylized result missing: %s. "
-                    "Skipping content+style+result comparison.",
-                    result_p,
-                )
-            else:
-                _save_comparison_image(
-                    content_path=str(content_p),
-                    style_path=str(style_p),
-                    out_dir=out_dir,
-                    include_result=True,
-                    result_path=str(result_p),
-                )
+        render_requested_comparisons(
+            content_path=Path(args.content),
+            style_path=Path(args.style),
+            output_dir=Path(cfg.output.output),
+            request=ComparisonRequest(
+                include_inputs=args.compare_inputs,
+                include_result=args.compare_result,
+            ),
+        )
 
 
 def main() -> None:

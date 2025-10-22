@@ -5,7 +5,9 @@ Defines Pydantic models representing structured configuration sections
 and a TOML-based config loader with validation support.
 """
 
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from typing import Any
 
 import tomlkit
 from pydantic import BaseModel, Field
@@ -38,6 +40,7 @@ from style_transfer_visualizer.constants import (
     VIDEO_QUALITY_MAX,
     VIDEO_QUALITY_MIN,
 )
+from style_transfer_visualizer.logging_utils import logger
 from style_transfer_visualizer.type_defs import InitMethod
 
 
@@ -149,3 +152,126 @@ class ConfigLoader:
             doc = tomlkit.load(f)
 
         return StyleTransferConfig.model_validate(doc)
+
+
+def parse_int_list(value: str | list[int]) -> list[int]:
+    """Convert a comma-separated string or list of ints into a list of ints."""
+    if isinstance(value, list):
+        return value
+    return [int(v) for v in value.split(",")]
+
+
+def build_config_from_cli(
+    cli_args: Mapping[str, Any],
+    *,
+    loader: Callable[[str], StyleTransferConfig] | None = None,
+    base_config: StyleTransferConfig | None = None,
+) -> StyleTransferConfig:
+    """
+    Construct a StyleTransferConfig based on CLI-provided arguments.
+
+    Loads a config file when supplied, applies overrides for each section,
+    and enforces any cross-field rules expected by the runtime.
+    """
+    args = dict(cli_args)
+    if base_config is not None:
+        cfg = base_config.model_copy(deep=True)
+    elif (config_path := args.get("config")):
+        load_fn = loader or ConfigLoader.load
+        cfg = load_fn(config_path)
+    else:
+        cfg = StyleTransferConfig.model_validate({})
+
+    _apply_output_overrides(cfg, args)
+    _apply_optimization_overrides(cfg, args)
+    _apply_video_overrides(cfg, args)
+    _apply_hardware_overrides(cfg, args)
+    _enforce_csv_plot_rule(cfg)
+    return cfg
+
+
+def _apply_output_overrides(
+    cfg: StyleTransferConfig,
+    args: Mapping[str, Any],
+) -> None:
+    if "output" in args:
+        cfg.output.output = args["output"]
+    if "log_every" in args:
+        cfg.output.log_every = args["log_every"]
+    if "log_loss" in args:
+        cfg.output.log_loss = args["log_loss"]
+    if args.get("no_plot"):
+        cfg.output.plot_losses = False
+
+
+def _apply_optimization_overrides(
+    cfg: StyleTransferConfig,
+    args: Mapping[str, Any],
+) -> None:
+    if "steps" in args:
+        cfg.optimization.steps = args["steps"]
+    if "style_w" in args:
+        cfg.optimization.style_w = args["style_w"]
+    if "content_w" in args:
+        cfg.optimization.content_w = args["content_w"]
+    if "lr" in args:
+        cfg.optimization.lr = args["lr"]
+    if "init_method" in args:
+        cfg.optimization.init_method = args["init_method"]
+    if "seed" in args:
+        cfg.optimization.seed = args["seed"]
+    if args.get("no_normalize"):
+        cfg.optimization.normalize = False
+
+    if (style_layers := args.get("style_layers")):
+        cfg.optimization.style_layers = parse_int_list(style_layers)
+    if (content_layers := args.get("content_layers")):
+        cfg.optimization.content_layers = parse_int_list(content_layers)
+
+
+def _apply_video_overrides(
+    cfg: StyleTransferConfig,
+    args: Mapping[str, Any],
+) -> None:
+    direct_attrs = (
+        "save_every",
+        "fps",
+        "quality",
+        "metadata_title",
+        "metadata_artist",
+    )
+    for name in direct_attrs:
+        if name in args:
+            setattr(cfg.video, name, args[name])
+
+    if args.get("no_video"):
+        cfg.video.create_video = False
+    if args.get("no_intro"):
+        cfg.video.intro_enabled = False
+    if args.get("final_only"):
+        cfg.video.final_only = True
+
+    if "intro_duration" in args:
+        cfg.video.intro_duration_seconds = max(args["intro_duration"], 0.0)
+    if "outro_duration" in args:
+        cfg.video.outro_duration_seconds = max(args["outro_duration"], 0.0)
+    if "final_frame_compare" in args:
+        cfg.video.final_frame_compare = args["final_frame_compare"]
+
+
+def _apply_hardware_overrides(
+    cfg: StyleTransferConfig,
+    args: Mapping[str, Any],
+) -> None:
+    if "device" in args:
+        cfg.hardware.device = args["device"]
+
+
+def _enforce_csv_plot_rule(cfg: StyleTransferConfig) -> None:
+    """Disable plotting when CSV logging is enabled, with a warning."""
+    if getattr(cfg.output, "log_loss", None) and cfg.output.plot_losses:
+        logger.warning(
+            "Loss plotting is disabled because CSV logging is enabled. "
+            "Only loss CSV will be created.",
+        )
+        cfg.output.plot_losses = False
