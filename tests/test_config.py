@@ -8,6 +8,7 @@ Covers:
 - Structural validation of the merged configuration object
 """
 import tempfile
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -49,7 +50,6 @@ def create_toml_file(data: dict[str, Any]) -> str:
     ) as temp:
         temp.write(toml_str)
         return temp.name
-
 
 
 def test_load_valid_config() -> None:
@@ -127,55 +127,70 @@ def test_video_config_invalid_quality() -> None:
 def test_optimization_config_negative_steps() -> None:
     """Ensure invalid steps raises ValidationError."""
     with pytest.raises(ValidationError) as exc_info:
-        stv_config.OptimizationConfig(steps=-1, style_w=DEFAULT_STYLE_WEIGHT,
-                                      content_w=DEFAULT_CONTENT_WEIGHT,
-                                      lr=DEFAULT_LEARNING_RATE,
-                                      seed=DEFAULT_SEED,
-                                      init_method=DEFAULT_INIT_METHOD)
+        stv_config.OptimizationConfig(
+            steps=-1,
+            style_w=DEFAULT_STYLE_WEIGHT,
+            content_w=DEFAULT_CONTENT_WEIGHT,
+            lr=DEFAULT_LEARNING_RATE,
+            seed=DEFAULT_SEED,
+            init_method=DEFAULT_INIT_METHOD,
+        )
     assert "steps" in str(exc_info.value)
 
 
 def test_optimization_config_invalid_lr() -> None:
     """Ensure invalid learning rate raises ValidationError."""
     with pytest.raises(ValidationError) as exc_info:
-        stv_config.OptimizationConfig(lr=0, steps=DEFAULT_STEPS,
-                                      style_w=DEFAULT_STYLE_WEIGHT,
-                                      content_w=DEFAULT_CONTENT_WEIGHT,
-                                      seed=DEFAULT_SEED,
-                                      init_method=DEFAULT_INIT_METHOD)
+        stv_config.OptimizationConfig(
+            lr=0,
+            steps=DEFAULT_STEPS,
+            style_w=DEFAULT_STYLE_WEIGHT,
+            content_w=DEFAULT_CONTENT_WEIGHT,
+            seed=DEFAULT_SEED,
+            init_method=DEFAULT_INIT_METHOD,
+        )
     assert "lr" in str(exc_info.value)
 
 
 def test_optimization_config_negative_style_w() -> None:
     """Ensure invalid style weight raises ValidationError."""
     with pytest.raises(ValidationError) as exc_info:
-        stv_config.OptimizationConfig(style_w=-100, steps=DEFAULT_STEPS,
-                                      content_w=DEFAULT_CONTENT_WEIGHT,
-                                      lr=DEFAULT_LEARNING_RATE,
-                                      seed=DEFAULT_SEED,
-                                      init_method=DEFAULT_INIT_METHOD)
+        stv_config.OptimizationConfig(
+            style_w=-100,
+            steps=DEFAULT_STEPS,
+            content_w=DEFAULT_CONTENT_WEIGHT,
+            lr=DEFAULT_LEARNING_RATE,
+            seed=DEFAULT_SEED,
+            init_method=DEFAULT_INIT_METHOD,
+        )
     assert "style_w" in str(exc_info.value)
 
 
 def test_optimization_config_negative_content_w() -> None:
     """Ensure invalid content weight raises ValidationError."""
     with pytest.raises(ValidationError) as exc_info:
-        stv_config.OptimizationConfig(content_w=-5.0, steps=DEFAULT_STEPS,
-                                      style_w=DEFAULT_STYLE_WEIGHT,
-                                      lr=DEFAULT_LEARNING_RATE,
-                                      seed=DEFAULT_SEED,
-                                      init_method=DEFAULT_INIT_METHOD)
+        stv_config.OptimizationConfig(
+            content_w=-5.0,
+            steps=DEFAULT_STEPS,
+            style_w=DEFAULT_STYLE_WEIGHT,
+            lr=DEFAULT_LEARNING_RATE,
+            seed=DEFAULT_SEED,
+            init_method=DEFAULT_INIT_METHOD,
+        )
     assert "content_w" in str(exc_info.value)
 
 
 def test_optimization_config_negative_seed() -> None:
     """Ensure invalid seed raises ValidationError."""
     with pytest.raises(ValidationError) as exc_info:
-        stv_config.OptimizationConfig(seed=-42, steps=DEFAULT_STEPS,
-                                      style_w=DEFAULT_STYLE_WEIGHT,
-                                      content_w=DEFAULT_CONTENT_WEIGHT,
-                                      lr=DEFAULT_LEARNING_RATE,
-                                      init_method=DEFAULT_INIT_METHOD)
+        stv_config.OptimizationConfig(
+            seed=-42,
+            steps=DEFAULT_STEPS,
+            style_w=DEFAULT_STYLE_WEIGHT,
+            content_w=DEFAULT_CONTENT_WEIGHT,
+            lr=DEFAULT_LEARNING_RATE,
+            init_method=DEFAULT_INIT_METHOD,
+        )
     assert "seed" in str(exc_info.value)
 
 
@@ -230,3 +245,25 @@ def test_default_layer_indices_match_constants() -> None:
     cfg = stv_config.StyleTransferConfig.model_validate({})
     assert cfg.optimization.style_layers == list(DEFAULT_STYLE_LAYERS)
     assert cfg.optimization.content_layers == list(DEFAULT_CONTENT_LAYERS)
+
+
+def test_build_config_from_cli_loads_config(tmp_path: Path) -> None:
+    """build_config_from_cli should invoke the loader when config is set."""
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("[output]\noutput = 'cli'\n", encoding="utf-8")
+
+    seen: dict[str, str] = {}
+
+    def fake_loader(path: str) -> stv_config.StyleTransferConfig:
+        seen["path"] = path
+        cfg = stv_config.StyleTransferConfig.model_validate({})
+        cfg.output.output = "cli"
+        return cfg
+
+    cfg = stv_config.build_config_from_cli(
+        {"config": str(config_path)},
+        loader=fake_loader,
+    )
+
+    assert seen["path"] == str(config_path)
+    assert cfg.output.output == "cli"

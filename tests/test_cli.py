@@ -19,7 +19,6 @@ import argparse
 import os
 import subprocess
 import sys
-from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
@@ -44,6 +43,7 @@ from style_transfer_visualizer.config_defaults import (
     DEFAULT_VIDEO_OUTRO_DURATION,
     DEFAULT_VIDEO_QUALITY,
 )
+from style_transfer_visualizer.runtime.comparison import ComparisonRequest
 from style_transfer_visualizer.type_defs import InputPaths
 
 if TYPE_CHECKING:
@@ -51,54 +51,13 @@ if TYPE_CHECKING:
     from _pytest.monkeypatch import MonkeyPatch
 
 
-class SaveGalleryKwargs(TypedDict):
-    """Keyword arguments passed to save_gallery_comparison in tests."""
+class RenderComparisonCall(TypedDict):
+    """Captured call information for render_requested_comparisons."""
 
     content_path: Path
     style_path: Path
-    result_path: Path | None
-    out_path: Path
-    target_size: tuple[int, int] | None
-    layout: str
-    wall_color: tuple[int, int, int]
-    frame_tone: str
-    show_labels: bool
-
-
-SaveGalleryFn = Callable[..., Path]
-
-
-def make_fake_save_gallery(calls: list[SaveGalleryKwargs]) -> SaveGalleryFn:
-    """Create a stub that records calls and returns the out_path."""
-    def fake_save_gallery_comparison(  # noqa: PLR0913
-        *,
-        content_path: Path,
-        style_path: Path,
-        result_path: Path | None,
-        out_path: Path,
-        target_size: tuple[int, int] | None = None,
-        layout: str = "gallery-stacked-left",
-        wall_color: tuple[int, int, int] = (0, 0, 0),
-        frame_tone: str = "gold",
-        show_labels: bool = True,
-    ) -> Path:
-        """Append call kwargs to the shared list and return out_path."""
-        calls.append(
-            {
-                "content_path": content_path,
-                "style_path": style_path,
-                "result_path": result_path,
-                "out_path": out_path,
-                "target_size": target_size,
-                "layout": layout,
-                "wall_color": wall_color,
-                "frame_tone": frame_tone,
-                "show_labels": show_labels,
-            },
-        )
-        return out_path
-
-    return fake_save_gallery_comparison
+    output_dir: Path
+    request: ComparisonRequest
 
 
 class TestCLIArgumentParsing:
@@ -606,28 +565,43 @@ device = "cuda"
             compare_result=False,
         )
 
-        calls: list[SaveGalleryKwargs] = []
+        recorded: dict[str, RenderComparisonCall] = {}
+
+        def fake_render_requested_comparisons(
+            *,
+            content_path: Path,
+            style_path: Path,
+            output_dir: Path,
+            request: ComparisonRequest,
+        ) -> list[Path]:
+            recorded["call"] = {
+                "content_path": content_path,
+                "style_path": style_path,
+                "output_dir": output_dir,
+                "request": request,
+            }
+            return []
+
         monkeypatch.setattr(
             stv_cli,
-            "save_gallery_comparison",
-            make_fake_save_gallery(calls),
+            "render_requested_comparisons",
+            fake_render_requested_comparisons,
         )
-
         monkeypatch.setattr(stv_main, "style_transfer", lambda *_: None)
         monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
 
         stv_cli.run_from_args(args)
-        assert len(calls) == 1
-        assert calls[0]["result_path"] is None
-        assert calls[0]["layout"] == "gallery-two-across"
+        call = recorded["call"]
+        assert call["request"].include_inputs is True
+        assert call["request"].include_result is False
+        assert call["output_dir"] == Path(out_dir)
 
-    def test_compare_result_missing_then_present(
+    def test_compare_result_requests_renderer(
         self,
         monkeypatch: MonkeyPatch,
         tmp_path: Path,
-        caplog: LogCaptureFixture,
     ) -> None:
-        """The result comparison warns if missing, then saves when present."""
+        """The result comparison delegates to the comparison renderer."""
         content = tmp_path / "c.jpg"
         style = tmp_path / "s.jpg"
         Image.new("RGB", (16, 16), "red").save(content)
@@ -635,8 +609,6 @@ device = "cuda"
 
         out_dir = tmp_path / "out"
         out_dir.mkdir()
-
-        expected_result_path = out_dir / "expected_result.png"
 
         args = argparse.Namespace(
             content=str(content),
@@ -661,32 +633,28 @@ device = "cuda"
             compare_result=True,
         )
 
-        calls: list[SaveGalleryKwargs] = []
+        call_count: dict[str, int] = {"count": 0}
+
+        def fake_render_requested_comparisons(
+            *,
+            content_path: Path,
+            style_path: Path,
+            output_dir: Path,
+            request: ComparisonRequest,
+        ) -> list[Path]:
+            call_count["count"] += 1
+            return []
+
         monkeypatch.setattr(
             stv_cli,
-            "save_gallery_comparison",
-            make_fake_save_gallery(calls),
+            "render_requested_comparisons",
+            fake_render_requested_comparisons,
         )
-
         monkeypatch.setattr(stv_main, "style_transfer", lambda *_: None)
         monkeypatch.setattr(stv_cli, "log_parameters", lambda *_: None)
-        monkeypatch.setattr(
-            stv_cli,
-            "stylized_image_path_from_paths",
-            lambda *_: expected_result_path,
-        )
 
-        caplog.set_level("WARNING")
         stv_cli.run_from_args(args)
-        assert "Expected stylized result missing" in caplog.text
-        assert len(calls) == 0
-
-        caplog.clear()
-        Image.new("RGB", (16, 16), "green").save(expected_result_path)
-        stv_cli.run_from_args(args)
-        assert len(calls) == 1
-        assert calls[0]["result_path"] == expected_result_path
-        assert calls[0]["layout"] == "gallery-stacked-left"
+        assert call_count["count"] == 1
 
 
 class TestLogParameters:
