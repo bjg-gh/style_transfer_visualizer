@@ -8,6 +8,7 @@ from typing import TypedDict
 import pytest
 from PIL import Image
 
+from style_transfer_visualizer.gallery import ComparisonRenderOptions
 from style_transfer_visualizer.runtime import comparison
 from style_transfer_visualizer.runtime.comparison import ComparisonRequest
 
@@ -31,35 +32,17 @@ def test_render_comparison_image_inputs_only(
 ) -> None:
     """Inputs-only comparisons render with the horizontal gallery layout."""
     content, style, _ = sample_images
-    recorded: dict[str, object] = {}
+    recorded: dict[str, ComparisonRenderOptions] = {}
 
-    def fake_save_gallery_comparison(  # noqa: PLR0913
-        *,
-        content_path: Path,
-        style_path: Path,
-        result_path: Path | None,
-        out_path: Path,
-        target_size: tuple[int, int] | None = None,
-        layout: str = "gallery-stacked-left",
-        wall_color: tuple[int, int, int] = (0, 0, 0),
-        frame_tone: str = "gold",
-        show_labels: bool = True,
-    ) -> Path:
-        recorded["content_path"] = content_path
-        recorded["style_path"] = style_path
-        recorded["result_path"] = result_path
-        recorded["out_path"] = out_path
-        recorded["target_size"] = target_size
-        recorded["layout"] = layout
-        recorded["wall_color"] = wall_color
-        recorded["frame_tone"] = frame_tone
-        recorded["show_labels"] = show_labels
-        return out_path
+    def fake_render(options: ComparisonRenderOptions) -> Path:
+        recorded["options"] = options
+        assert options.out_path is not None
+        return options.out_path
 
     monkeypatch.setattr(
         comparison,
-        "save_gallery_comparison",
-        fake_save_gallery_comparison,
+        "render_comparison",
+        fake_render,
     )
 
     out = comparison.render_comparison_image(
@@ -69,13 +52,14 @@ def test_render_comparison_image_inputs_only(
         include_result=False,
     )
 
-    assert out == comparison.comparison_output_path(
+    expected = comparison.comparison_output_path(
         tmp_path, content, style, include_result=False,
     )
-    assert recorded["layout"] == "gallery-two-across"
-    assert recorded["result_path"] is None
-    # target_size should match content dimensions
-    assert recorded["target_size"] == (32, 24)
+    assert out == expected
+    options = recorded["options"]
+    assert options.layout == "gallery-two-across"
+    assert options.result_path is None
+    assert options.target_size == (32, 24)
 
 
 def test_render_comparison_image_with_result(
@@ -85,35 +69,17 @@ def test_render_comparison_image_with_result(
 ) -> None:
     """Result comparisons use the stacked layout and pass the result path."""
     content, style, result = sample_images
-    recorded: dict[str, object] = {}
+    recorded: dict[str, ComparisonRenderOptions] = {}
 
-    def fake_save_gallery_comparison(  # noqa: PLR0913
-        *,
-        content_path: Path,
-        style_path: Path,
-        result_path: Path | None,
-        out_path: Path,
-        target_size: tuple[int, int] | None = None,
-        layout: str = "gallery-stacked-left",
-        wall_color: tuple[int, int, int] = (0, 0, 0),
-        frame_tone: str = "gold",
-        show_labels: bool = True,
-    ) -> Path:
-        recorded["content_path"] = content_path
-        recorded["style_path"] = style_path
-        recorded["result_path"] = result_path
-        recorded["out_path"] = out_path
-        recorded["target_size"] = target_size
-        recorded["layout"] = layout
-        recorded["wall_color"] = wall_color
-        recorded["frame_tone"] = frame_tone
-        recorded["show_labels"] = show_labels
-        return out_path
+    def fake_render(options: ComparisonRenderOptions) -> Path:
+        recorded["options"] = options
+        assert options.out_path is not None
+        return options.out_path
 
     monkeypatch.setattr(
         comparison,
-        "save_gallery_comparison",
-        fake_save_gallery_comparison,
+        "render_comparison",
+        fake_render,
     )
 
     out = comparison.render_comparison_image(
@@ -124,11 +90,13 @@ def test_render_comparison_image_with_result(
         result_path=result,
     )
 
-    assert out == comparison.comparison_output_path(
+    expected = comparison.comparison_output_path(
         tmp_path, content, style, include_result=True,
     )
-    assert recorded["layout"] == "gallery-stacked-left"
-    assert recorded["result_path"] == result
+    assert out == expected
+    options = recorded["options"]
+    assert options.layout == "gallery-stacked-left"
+    assert options.result_path == result
 
 
 class RenderCall(TypedDict):

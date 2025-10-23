@@ -9,10 +9,11 @@ from typing import TYPE_CHECKING
 from PIL import Image
 
 from style_transfer_visualizer.constants import COLOR_GREY
-from style_transfer_visualizer.image_grid.naming import (
-    default_comparison_name,
-    save_gallery_comparison,
+from style_transfer_visualizer.gallery import (
+    ComparisonRenderOptions,
+    render_comparison,
 )
+from style_transfer_visualizer.image_grid.naming import default_comparison_name
 from style_transfer_visualizer.logging_utils import logger
 from style_transfer_visualizer.runtime.output import (
     stylized_image_path_from_paths,
@@ -87,19 +88,19 @@ def render_comparison_image(
         output_dir, content_path, style_path, include_result=include_result,
     )
 
-    saved_path = save_gallery_comparison(
-        content_path=content_path,
-        style_path=style_path,
-        result_path=result_path,
-        out_path=out_path,
-        target_size=target_size,
-        layout=layout,
-        wall_color=COLOR_GREY,
-        frame_tone="gold",
-        show_labels=True,
+    return render_comparison(
+        ComparisonRenderOptions(
+            content_path=content_path,
+            style_path=style_path,
+            result_path=result_path,
+            out_path=out_path,
+            target_size=target_size,
+            layout=layout,
+            wall_color=COLOR_GREY,
+            frame_style="gold",
+            show_labels=True,
+        ),
     )
-    logger.info("Saved comparison image: %s", saved_path)
-    return saved_path
 
 
 def render_requested_comparisons(

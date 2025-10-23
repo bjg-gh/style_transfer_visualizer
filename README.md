@@ -72,6 +72,17 @@ Or with a config file:
 uv run style-visualizer --config config.toml
 ```
 
+### Comparison Gallery CLI
+
+Render comparison grids or gallery walls without running the training
+pipeline:
+
+```bash
+uv run compare-grid --content path/to/content.jpg --style path/to/style.jpg --result path/to/stylized.png
+```
+
+Use `uv run compare-grid --help` to see all layout, sizing, and framing options.
+
 ### Common Options
 
 - `--steps`, `--save-every`, `--style-w`, `--content-w`, `--lr`
@@ -285,7 +296,18 @@ The `tools` directory contains utilities that work with the project image grid a
 
 ### tools/compare_grid.py
 
-A standalone runner for building comparison images.
+The legacy script now delegates to the reusable CLI implementation shipped as
+the `compare-grid` console entry point. Invoke it directly instead of calling
+Python on the tools path:
+
+```bash
+uv run compare-grid --content path/to/content.jpg --style path/to/style.jpg --result path/to/stylized.png
+```
+
+The command understands both the simple grid layout (no `--layout` argument) and
+the gallery wall presets. The underlying Python API is available via
+`style_transfer_visualizer.gallery.render_comparison` if you want to script the
+behavior.
 
 ### Modes
 
@@ -312,7 +334,7 @@ A standalone runner for building comparison images.
 Grid mode with three images
 
 ```bat
-uv run python tools\compare_grid.py ^
+uv run compare-grid ^
   --content C:\img\content.jpg ^
   --style C:\img\style.jpg ^
   --result C:
@@ -327,7 +349,7 @@ uns\cmp_grid.png
 Gallery mode two across for Content and Style
 
 ```bat
-uv run python tools\compare_grid.py ^
+uv run compare-grid ^
   --content C:\img\content.jpg ^
   --style C:\img\style.jpg ^
   --layout gallery-two-across ^
@@ -340,7 +362,7 @@ uns\gallery_inputs.png
 Gallery mode stacked left for Content, Style, and Result
 
 ```bat
-uv run python tools\compare_grid.py ^
+uv run compare-grid ^
   --content C:\img\content.jpg ^
   --style C:\img\style.jpg ^
   --result C:
@@ -361,5 +383,6 @@ uns\gallery_result.png
 ## Additional Tools
 
 ```csv
-tools    compare_grid.py    Standalone helper to build grid or gallery comparison images
+cli      compare-grid       Console helper to build grid or gallery comparison images
+tools    compare_grid.py    Legacy wrapper that delegates to the compare-grid command
 ```
