@@ -10,20 +10,30 @@ Note:
     renamed.
 
 """
-
+import shutil
 import tempfile
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
 from PIL import Image
 from torch import Tensor
-from torch.optim import Optimizer
 
+from style_transfer_visualizer.config import StyleTransferConfig
 from style_transfer_visualizer.constants import COLOR_MODE_RGB
 from style_transfer_visualizer.logging_utils import logger
 from style_transfer_visualizer.type_defs import InputPaths
+
+STYLE_CONFIG_VARIANTS = [
+    pytest.param({"device": "cpu", "mode": "realtime"}, id="cpu-realtime"),
+    pytest.param({"device": "cpu", "mode": "postprocess"}, id="cpu-postprocess"),
+]
+if torch.cuda.is_available():
+    STYLE_CONFIG_VARIANTS.append(
+        pytest.param({"device": "cuda", "mode": "realtime"}, id="cuda-realtime"),
+    )
 
 
 @pytest.fixture
@@ -40,9 +50,94 @@ def test_dir() -> Generator[str, None, None]:
 
 
 @pytest.fixture
+def make_output_subdir(test_dir: str) -> Callable[[str], Path]:
+    """Create (and reset) named subdirectories under the shared test_dir."""
+    base = Path(test_dir)
+
+    def _make(sub_name: str) -> Path:
+        target = base / sub_name
+        if target.exists():
+            shutil.rmtree(target)
+        target.mkdir(parents=True)
+        return target
+
+    return _make
+
+
+@pytest.fixture
 def output_dir(tmp_path: Path) -> Path:
     """Provide a reusable temporary directory for output files."""
     return tmp_path
+
+
+@pytest.fixture
+def make_style_transfer_config(
+    tmp_path: Path,
+    test_device: torch.device,
+) -> Callable[..., StyleTransferConfig]:
+    """
+    Build StyleTransferConfig instances with optional section overrides.
+
+    Ensures each config uses an isolated output directory under tmp_path and
+    defaults the device to the active test device.
+    """
+    default_output = tmp_path / "stv_outputs"
+    default_output.mkdir(exist_ok=True)
+
+    def _build(
+        *,
+        optimization: dict[str, Any] | None = None,
+        video: dict[str, Any] | None = None,
+        output: dict[str, Any] | None = None,
+        hardware: dict[str, Any] | None = None,
+        extras: dict[str, Any] | None = None,
+    ) -> StyleTransferConfig:
+        data: dict[str, Any] = {}
+        if optimization:
+            data["optimization"] = dict(optimization)
+        if video:
+            data["video"] = dict(video)
+        effective_output = dict(output or {})
+        if "output" in effective_output:
+            effective_output["output"] = str(effective_output["output"])
+        else:
+            effective_output["output"] = str(default_output)
+        data["output"] = effective_output
+
+        effective_hardware = dict(hardware or {})
+        device_value = effective_hardware.get("device", str(test_device))
+        effective_hardware["device"] = str(device_value)
+        data["hardware"] = effective_hardware
+
+        if extras:
+            for section, section_data in extras.items():
+                if isinstance(section_data, dict):
+                    data[section] = dict(section_data)
+                else:
+                    data[section] = section_data
+
+        return StyleTransferConfig.model_validate(data)
+
+    return _build
+
+
+@pytest.fixture(params=STYLE_CONFIG_VARIANTS)
+def style_config_variant(
+    make_style_transfer_config: Callable[..., StyleTransferConfig],
+    request: pytest.FixtureRequest,
+    tmp_path: Path,
+) -> StyleTransferConfig:
+    """Provide StyleTransferConfig variants covering device and video modes."""
+    variant: dict[str, str] = request.param
+    output_root = tmp_path / f"stv_{variant['device']}_{variant['mode']}"
+    output_root.mkdir(exist_ok=True)
+    cfg = make_style_transfer_config(
+        video={"mode": variant["mode"]},
+        hardware={"device": variant["device"]},
+        output={"output": output_root},
+    )
+    cfg.video.mode_override = True
+    return cfg
 
 
 @pytest.fixture
@@ -95,25 +190,23 @@ def input_paths(content_image: Path, style_image: Path) -> InputPaths:
 
 
 @pytest.fixture
-def mock_vgg() -> torch.nn.Module:
-    """Provide a mock VGG-style model with a small Conv+ReLU stack."""
-    class MockVGG(torch.nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.features = torch.nn.Sequential(
-                torch.nn.Conv2d(3, 64, 3, padding=1),
-                torch.nn.ReLU(inplace=True),
-            )
+def make_input_paths(
+    content_image: Path,
+    style_image: Path,
+) -> Callable[..., InputPaths]:
+    """Factory for building InputPaths with optional overrides."""
 
-        @staticmethod
-        def forward(_: torch.Tensor) -> dict[str, torch.Tensor]:
-            return {
-                "relu1_1": torch.randn(1, 64, 32, 32),
-                "relu2_1": torch.randn(1, 128, 16, 16),
-                "relu3_1": torch.randn(1, 256, 8, 8),
-            }
+    def _build(
+        *,
+        content: str | Path | None = None,
+        style: str | Path | None = None,
+    ) -> InputPaths:
+        content_path = Path(content) if content is not None else content_image
+        style_path = Path(style) if style is not None else style_image
+        return InputPaths(content_path=str(content_path),
+                          style_path=str(style_path))
 
-    return MockVGG()
+    return _build
 
 
 @pytest.fixture
@@ -126,58 +219,6 @@ def style_layers() -> list[int]:
 def content_layers() -> list[int]:
     """Return example indices for content feature layers."""
     return [1, 3]
-
-
-@pytest.fixture
-def mock_feature_maps() -> Tensor:
-    """Create a mock feature map tensor."""
-    return torch.randn(1, 64, 32, 32)
-
-
-@pytest.fixture
-def mock_style_targets() -> list[Tensor]:
-    """Create a list of mock style target Gram matrices."""
-    return [torch.randn(1, 64, 64) for _ in range(3)]
-
-
-@pytest.fixture
-def mock_content_targets() -> list[Tensor]:
-    """Create a list of mock content feature maps."""
-    return [torch.randn(1, 64, 32, 32) for _ in range(2)]
-
-
-@pytest.fixture
-def mock_vgg_features() -> dict:
-    """Create a dictionary of mock VGG feature maps."""
-    return {
-        "relu1_1": torch.randn(1, 64, 32, 32),
-        "relu2_1": torch.randn(1, 128, 16, 16),
-        "relu3_1": torch.randn(1, 256, 8, 8),
-    }
-
-
-@pytest.fixture
-def input_image_size() -> tuple[int, int]:
-    """Return a standard input image size (256, 256)."""
-    return 256, 256
-
-
-@pytest.fixture
-def mock_optimizer(sample_tensor: Tensor) -> Optimizer:
-    """Create a mock optimizer over the sample tensor."""
-    return torch.optim.Adam([sample_tensor.requires_grad_(True)], lr=0.01)  # noqa: FBT003
-
-
-@pytest.fixture
-def video_path(test_dir: str) -> Path:
-    """
-    Return the expected path to a test video file.
-
-    Note:
-        This does not create a video file.
-
-    """
-    return Path(test_dir) / "test_video.mp4"
 
 
 @pytest.fixture(autouse=True)

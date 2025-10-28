@@ -9,9 +9,9 @@ Covers:
 """
 from __future__ import annotations
 
-import shutil
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 import numpy as np
 import pytest
@@ -32,16 +32,72 @@ if TYPE_CHECKING:
     from _pytest.monkeypatch import MonkeyPatch
 
 
-def _base_config() -> StyleTransferConfig:
-    """
-    Return a default config instance for tests.
+@dataclass(slots=True)
+class VideoTestAssets:
+    """Bundle shared fixtures for video-related integration tests."""
 
-    Uses Pydantic's model_validate on an empty dict to populate defaults.
-    """
-    return StyleTransferConfig.model_validate({})
+    make_subdir: Callable[[str], Path]
+    content_image: str
+    style_image: str
+    make_config: Callable[..., StyleTransferConfig]
+    make_input_paths: Callable[..., InputPaths]
+
+    def new_output(self, name: str) -> Path:
+        """Create a fresh output directory under the test root."""
+        return self.make_subdir(name)
+
+    def inputs(
+        self,
+        *,
+        content: str | Path | None = None,
+        style: str | Path | None = None,
+    ) -> InputPaths:
+        """Build InputPaths with optional overrides."""
+        return self.make_input_paths(
+            content=content if content is not None else self.content_image,
+            style=style if style is not None else self.style_image,
+        )
+
+    def config(
+        self,
+        *,
+        optimization: dict[str, Any] | None = None,
+        video: dict[str, Any] | None = None,
+        output: dict[str, Any] | None = None,
+        extras: dict[str, Any] | None = None,
+    ) -> StyleTransferConfig:
+        """Create a StyleTransferConfig with provided overrides."""
+        return self.make_config(
+            optimization=optimization,
+            video=video,
+            output=output,
+            extras=extras,
+        )
 
 
-def test_style_transfer_minimal(monkeypatch: MonkeyPatch) -> None:
+@pytest.fixture
+def video_assets(
+    make_output_subdir: Callable[[str], Path],
+    content_image: Path,
+    style_image: Path,
+    make_style_transfer_config: Callable[..., StyleTransferConfig],
+    make_input_paths: Callable[..., InputPaths],
+) -> VideoTestAssets:
+    """Aggregate reusable helpers for video-centric tests."""
+    return VideoTestAssets(
+        make_subdir=make_output_subdir,
+        content_image=str(content_image),
+        style_image=str(style_image),
+        make_config=make_style_transfer_config,
+        make_input_paths=make_input_paths,
+    )
+
+
+def test_style_transfer_minimal(
+    monkeypatch: MonkeyPatch,
+    make_style_transfer_config: Callable[..., StyleTransferConfig],
+    make_input_paths: Callable[..., InputPaths],
+) -> None:
     """Smoke test for style_transfer() with mocked internals."""
     dummy_tensor = torch.rand(1, 3, 256, 256)
 
@@ -82,17 +138,21 @@ def test_style_transfer_minimal(monkeypatch: MonkeyPatch) -> None:
     )
 
     # Build inputs via new API
-    paths = InputPaths(content_path="dummy.jpg", style_path="dummy2.jpg")
-    cfg = _base_config()
-    cfg.optimization.steps = 10
-    cfg.optimization.normalize = True
-    cfg.optimization.seed = 42
-    cfg.output.output = "output"
-    cfg.output.plot_losses = True
-    cfg.video.create_video = False
-    cfg.video.save_every = 5
-    cfg.video.fps = 1
-    cfg.video.quality = 5
+    paths = make_input_paths(content="dummy.jpg", style="dummy2.jpg")
+    cfg = make_style_transfer_config(
+        optimization={
+            "steps": 10,
+            "normalize": True,
+            "seed": 42,
+        },
+        output={"output": "output", "plot_losses": True},
+        video={
+            "create_video": False,
+            "save_every": 5,
+            "fps": 1,
+            "quality": 5,
+        },
+    )
 
     result = stv_main.style_transfer(paths, cfg)
 
@@ -103,6 +163,8 @@ def test_style_transfer_minimal(monkeypatch: MonkeyPatch) -> None:
 def test_style_transfer_auto_selects_postprocess(
     monkeypatch: MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
+    make_style_transfer_config: Callable[..., StyleTransferConfig],
+    make_input_paths: Callable[..., InputPaths],
 ) -> None:
     """Video mode should switch and log when heuristic recommends it."""
     dummy_tensor = torch.rand(1, 3, 64, 96)
@@ -156,10 +218,9 @@ def test_style_transfer_auto_selects_postprocess(
     )
     monkeypatch.setattr(stv_runtime, "save_outputs", lambda *_a, **_kw: None)
 
-    cfg = _base_config()
-    cfg.video.final_frame_compare = False
+    cfg = make_style_transfer_config(video={"final_frame_compare": False})
 
-    paths = InputPaths(content_path="foo.png", style_path="bar.png")
+    paths = make_input_paths(content="foo.png", style="bar.png")
 
     with caplog.at_level("INFO"):
         stv_main.style_transfer(paths, cfg)
@@ -171,7 +232,11 @@ def test_style_transfer_auto_selects_postprocess(
     )
 
 
-def test_style_transfer_no_plot(monkeypatch: MonkeyPatch) -> None:
+def test_style_transfer_no_plot(
+    monkeypatch: MonkeyPatch,
+    make_style_transfer_config: Callable[..., StyleTransferConfig],
+    make_input_paths: Callable[..., InputPaths],
+) -> None:
     """Test style_transfer() with plotting disabled."""
     dummy_tensor = torch.rand(1, 3, 256, 256)
 
@@ -203,12 +268,12 @@ def test_style_transfer_no_plot(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(stv_video, "setup_video_writer",
                         lambda *_a, **_k: None)
 
-    paths = InputPaths(content_path="dummy.jpg", style_path="dummy2.jpg")
-    cfg = _base_config()
-    cfg.optimization.steps = 1
-    cfg.video.create_video = False
-    cfg.output.output = "output"
-    cfg.output.plot_losses = False
+    paths = make_input_paths(content="dummy.jpg", style="dummy2.jpg")
+    cfg = make_style_transfer_config(
+        optimization={"steps": 1},
+        video={"create_video": False},
+        output={"output": "output", "plot_losses": False},
+    )
 
     result = stv_main.style_transfer(paths, cfg)
     assert isinstance(result, torch.Tensor)
@@ -227,28 +292,33 @@ def expected_video_path(
 
 @pytest.mark.parametrize("create_video_flag", [True, False])
 def test_video_creation_flag(
-    test_dir: str,
-    content_image: str,
-    style_image: str,
+    video_assets: VideoTestAssets,
     create_video_flag: bool,  # noqa: FBT001
     monkeypatch: MonkeyPatch,
 ) -> None:
     """Test whether video is created when flag is toggled."""
-    output_dir = setup_test_directory(test_dir, "video_test")
+    output_dir = video_assets.new_output("video_test")
     apply_mock(monkeypatch)
 
-    paths = InputPaths(content_path=content_image, style_path=style_image)
-    cfg = _base_config()
-    cfg.optimization.steps = 1
-    cfg.video.save_every = 1
-    cfg.video.quality = 1
-    cfg.video.create_video = create_video_flag
-    cfg.output.output = output_dir
+    paths = video_assets.inputs()
+    cfg = video_assets.config(
+        optimization={"steps": 1},
+        video={
+            "save_every": 1,
+            "quality": 1,
+            "create_video": create_video_flag,
+        },
+        output={"output": output_dir},
+    )
 
     result = stv_main.style_transfer(paths, cfg)
 
     assert isinstance(result, torch.Tensor)
-    video = expected_video_path(output_dir, content_image, style_image)
+    video = expected_video_path(
+        output_dir,
+        video_assets.content_image,
+        video_assets.style_image,
+    )
     if create_video_flag:
         assert video.exists()
     else:
@@ -256,16 +326,14 @@ def test_video_creation_flag(
 
 
 @pytest.mark.parametrize(("fps", "quality"), [(10, 1), (24, 5), (30, 10)])
-def test_video_params_passed(  # noqa: PLR0913
-    test_dir: str,
-    content_image: str,
-    style_image: str,
+def test_video_params_passed(
+    video_assets: VideoTestAssets,
     fps: int,
     quality: int,
     monkeypatch: MonkeyPatch,
 ) -> None:
     """Test video FPS and quality are passed to writer."""
-    output_dir = setup_test_directory(test_dir, "video_param_test")
+    output_dir = video_assets.new_output("video_param_test")
     apply_mock(monkeypatch)
 
     calls: list[tuple[int, int, Path, str]] = []
@@ -282,14 +350,17 @@ def test_video_params_passed(  # noqa: PLR0913
 
     monkeypatch.setattr(stv_video, "setup_video_writer", wrapped)
 
-    paths = InputPaths(content_path=content_image, style_path=style_image)
-    cfg = _base_config()
-    cfg.optimization.steps = 1
-    cfg.video.create_video = True
-    cfg.video.save_every = 1
-    cfg.video.fps = fps
-    cfg.video.quality = quality
-    cfg.output.output = output_dir
+    paths = video_assets.inputs()
+    cfg = video_assets.config(
+        optimization={"steps": 1},
+        video={
+            "create_video": True,
+            "save_every": 1,
+            "fps": fps,
+            "quality": quality,
+        },
+        output={"output": output_dir},
+    )
 
     stv_main.style_transfer(paths, cfg)
 
@@ -300,13 +371,11 @@ def test_video_params_passed(  # noqa: PLR0913
 
 
 def test_style_transfer_passes_intro_info(
-    test_dir: str,
-    content_image: str,
-    style_image: str,
+    video_assets: VideoTestAssets,
     monkeypatch: MonkeyPatch,
 ) -> None:
     """Intro metadata flows from prepare_intro_segment into optimization."""
-    output_dir = setup_test_directory(test_dir, "intro_info")
+    output_dir = video_assets.new_output("intro_info")
     dummy_tensor = torch.rand(1, 3, 64, 64)
 
     monkeypatch.setattr(
@@ -389,12 +458,12 @@ def test_style_transfer_passes_intro_info(
         lambda *_a, **_k: (np.zeros((64, 64, 3), dtype=np.uint8), 5),
     )
 
-    paths = InputPaths(content_path=content_image, style_path=style_image)
-    cfg = _base_config()
-    cfg.optimization.steps = 1
-    cfg.video.create_video = True
-    cfg.video.save_every = 1
-    cfg.output.output = output_dir
+    paths = video_assets.inputs()
+    cfg = video_assets.config(
+        optimization={"steps": 1},
+        video={"create_video": True, "save_every": 1},
+        output={"output": output_dir},
+    )
     expected_crossfade = round(
         cfg.video.fps * stv_video.INTRO_CROSSFADE_SECONDS,
     )
@@ -411,13 +480,11 @@ def test_style_transfer_passes_intro_info(
 
 
 def test_style_transfer_handles_missing_intro_segment(
-    test_dir: str,
-    content_image: str,
-    style_image: str,
+    video_assets: VideoTestAssets,
     monkeypatch: MonkeyPatch,
 ) -> None:
     """When intro is skipped we pass default metadata into optimization."""
-    output_dir = setup_test_directory(test_dir, "intro_none")
+    output_dir = video_assets.new_output("intro_none")
     dummy_tensor = torch.rand(1, 3, 64, 64)
 
     monkeypatch.setattr(
@@ -500,12 +567,12 @@ def test_style_transfer_handles_missing_intro_segment(
         lambda *_a, **_k: None,
     )
 
-    paths = InputPaths(content_path=content_image, style_path=style_image)
-    cfg = _base_config()
-    cfg.optimization.steps = 1
-    cfg.video.create_video = True
-    cfg.video.save_every = 1
-    cfg.output.output = output_dir
+    paths = video_assets.inputs()
+    cfg = video_assets.config(
+        optimization={"steps": 1},
+        video={"create_video": True, "save_every": 1},
+        output={"output": output_dir},
+    )
     expected_crossfade = 0
 
     result = stv_main.style_transfer(paths, cfg)
@@ -518,13 +585,11 @@ def test_style_transfer_handles_missing_intro_segment(
 
 
 def test_style_transfer_appends_final_comparison_frame(
-    test_dir: str,
-    content_image: str,
-    style_image: str,
+    video_assets: VideoTestAssets,
     monkeypatch: MonkeyPatch,
 ) -> None:
     """Final comparison frame should be appended when enabled."""
-    output_dir = setup_test_directory(test_dir, "final_compare_frame")
+    output_dir = video_assets.new_output("final_compare_frame")
     dummy_tensor = torch.rand(1, 3, 64, 64)
 
     monkeypatch.setattr(
@@ -617,29 +682,30 @@ def test_style_transfer_appends_final_comparison_frame(
         fake_append,
     )
 
-    paths = InputPaths(content_path=content_image, style_path=style_image)
-    cfg = _base_config()
-    cfg.optimization.steps = 1
-    cfg.video.create_video = True
-    cfg.video.save_every = 1
-    cfg.video.final_frame_compare = True
-    cfg.output.output = output_dir
+    paths = video_assets.inputs()
+    cfg = video_assets.config(
+        optimization={"steps": 1},
+        video={
+            "create_video": True,
+            "save_every": 1,
+            "final_frame_compare": True,
+        },
+        output={"output": output_dir},
+    )
 
     result = stv_main.style_transfer(paths, cfg)
 
     assert isinstance(result, torch.Tensor)
     assert captured["cfg"] is cfg.video
     assert captured["writer"] is writer_instance
-    assert captured["content"] == Path(content_image)
-    assert captured["style"] == Path(style_image)
+    assert captured["content"] == Path(video_assets.content_image)
+    assert captured["style"] == Path(video_assets.style_image)
     assert captured["shape"] == (64, 64, 3)
     assert writer_instance.closed is True
 
 
 def test_final_only_disables_video(
-    test_dir: str,
-    content_image: str,
-    style_image: str,
+    video_assets: VideoTestAssets,
     monkeypatch: MonkeyPatch,
 ) -> None:
     """Test final_only mode disables video even if requested."""
@@ -648,25 +714,32 @@ def test_final_only_disables_video(
         "validate_input_paths",
         lambda *_args, **_kwargs: None,
     )
-    output_dir = setup_test_directory(test_dir, "final_only_test")
+    output_dir = video_assets.new_output("final_only_test")
     apply_mock(monkeypatch)
 
-    paths = InputPaths(content_path=content_image, style_path=style_image)
-    cfg = _base_config()
-    cfg.optimization.steps = 1
-    cfg.video.final_only = True
-    cfg.video.create_video = True  # Should be ignored by final_only
-    cfg.video.save_every = 1
-    cfg.output.output = output_dir
+    paths = video_assets.inputs()
+    cfg = video_assets.config(
+        optimization={"steps": 1},
+        video={
+            "final_only": True,
+            "create_video": True,
+            "save_every": 1,
+        },
+        output={"output": output_dir},
+    )
 
     result = stv_main.style_transfer(paths, cfg)
 
     assert isinstance(result, torch.Tensor)
-    video = expected_video_path(output_dir, content_image, style_image)
+    video = expected_video_path(
+        output_dir,
+        video_assets.content_image,
+        video_assets.style_image,
+    )
     assert not video.exists()
     assert Path(
         output_dir,
-        f"stylized_{Path(content_image).stem}_x_{Path(style_image).stem}.png",
+        f"stylized_{Path(video_assets.content_image).stem}_x_{Path(video_assets.style_image).stem}.png",
     ).exists()
 
 
@@ -707,17 +780,6 @@ def apply_mock(monkeypatch: MonkeyPatch) -> None:
             video_path.write_text("mock video")  # Avoid bytes warning
 
     monkeypatch.setattr(stv_runtime, "save_outputs", mock_save)
-
-
-def setup_test_directory(base_dir: str, sub_name: str) -> str:
-    """Create a clean test output directory under a base path."""
-    out_dir = Path(base_dir) / sub_name
-    if out_dir.exists():
-        shutil.rmtree(out_dir)
-    out_dir.mkdir(parents=True)
-    return str(out_dir)
-
-
 def patch_runner(
     monkeypatch: MonkeyPatch,
     *,

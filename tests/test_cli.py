@@ -20,7 +20,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, Callable, TypedDict
 
 import pytest
 import torch
@@ -663,6 +663,8 @@ class TestLogParameters:
     def test_log_parameters_logs_config(
         self,
         caplog: LogCaptureFixture,
+        make_style_transfer_config: Callable[..., StyleTransferConfig],
+        make_input_paths: Callable[..., InputPaths],
     ) -> None:
         """Test config path is logged if provided."""
         args = argparse.Namespace(
@@ -671,23 +673,27 @@ class TestLogParameters:
             config="abc.toml",
         )
 
-        cfg = StyleTransferConfig.model_validate({})
-        cfg.output.output = "out"
-        cfg.optimization.steps = 10
-        cfg.video.save_every = 2
-        cfg.optimization.style_w = 1.0
-        cfg.optimization.content_w = 1.0
-        cfg.optimization.lr = 0.5
-        cfg.optimization.style_layers = [0, 5, 10]
-        cfg.optimization.content_layers = [21]
-        cfg.video.fps = 10
-        cfg.optimization.init_method = "content"
-        cfg.optimization.normalize = True
-        cfg.video.create_video = True
-        cfg.output.plot_losses = True
-        cfg.optimization.seed = 0
+        cfg = make_style_transfer_config(
+            optimization={
+                "steps": 10,
+                "style_w": 1.0,
+                "content_w": 1.0,
+                "lr": 0.5,
+                "style_layers": [0, 5, 10],
+                "content_layers": [21],
+                "init_method": "content",
+                "normalize": True,
+                "seed": 0,
+            },
+            video={
+                "save_every": 2,
+                "fps": 10,
+                "create_video": True,
+            },
+            output={"output": "out", "plot_losses": True},
+        )
 
-        paths = InputPaths(content_path=args.content, style_path=args.style)
+        paths = make_input_paths(content=args.content, style=args.style)
 
         caplog.set_level("INFO")
         stv_cli.log_parameters(paths, cfg, args)
@@ -698,6 +704,8 @@ class TestLogParameters:
     def test_log_parameters_without_config(
         self,
         caplog: LogCaptureFixture,
+        make_style_transfer_config: Callable[..., StyleTransferConfig],
+        make_input_paths: Callable[..., InputPaths],
     ) -> None:
         """Test log_parameters skips config logging if not provided."""
         args = argparse.Namespace(
@@ -706,8 +714,8 @@ class TestLogParameters:
             config=None,
         )
 
-        cfg = StyleTransferConfig.model_validate({})
-        paths = InputPaths(content_path=args.content, style_path=args.style)
+        cfg = make_style_transfer_config()
+        paths = make_input_paths(content=args.content, style=args.style)
 
         caplog.set_level("INFO")
         stv_cli.log_parameters(paths, cfg, args)
@@ -717,6 +725,8 @@ class TestLogParameters:
     def test_log_parameters_includes_layer_config(
         self,
         caplog: LogCaptureFixture,
+        make_style_transfer_config: Callable[..., StyleTransferConfig],
+        make_input_paths: Callable[..., InputPaths],
     ) -> None:
         """Ensure log_parameters prints layer config to logs."""
         args = argparse.Namespace(
@@ -724,10 +734,13 @@ class TestLogParameters:
             style="s.jpg",
             config="abc.toml",
         )
-        cfg = StyleTransferConfig.model_validate({})
-        cfg.optimization.style_layers = [0, 5, 10]
-        cfg.optimization.content_layers = [21]
-        paths = InputPaths(content_path=args.content, style_path=args.style)
+        cfg = make_style_transfer_config(
+            optimization={
+                "style_layers": [0, 5, 10],
+                "content_layers": [21],
+            },
+        )
+        paths = make_input_paths(content=args.content, style=args.style)
 
         caplog.set_level("INFO")
         stv_cli.log_parameters(paths, cfg, args)
