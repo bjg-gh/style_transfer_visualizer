@@ -33,6 +33,7 @@ from style_transfer_visualizer.config_defaults import (
     DEFAULT_VIDEO_FINAL_FRAME_COMPARE,
     DEFAULT_VIDEO_INTRO_DURATION,
     DEFAULT_VIDEO_INTRO_ENABLED,
+    DEFAULT_VIDEO_MODE,
     DEFAULT_VIDEO_OUTRO_DURATION,
     DEFAULT_VIDEO_QUALITY,
 )
@@ -41,7 +42,7 @@ from style_transfer_visualizer.constants import (
     VIDEO_QUALITY_MIN,
 )
 from style_transfer_visualizer.logging_utils import logger
-from style_transfer_visualizer.type_defs import InitMethod
+from style_transfer_visualizer.type_defs import InitMethod, VideoMode
 
 
 class OptimizationConfig(BaseModel):
@@ -84,6 +85,12 @@ class VideoConfig(BaseModel):
     outro_duration_seconds: float = Field(
         DEFAULT_VIDEO_OUTRO_DURATION,
         ge=0.0,
+    )
+    mode: VideoMode = Field(DEFAULT_VIDEO_MODE)
+    mode_override: bool = Field(
+        default=False,
+        exclude=True,
+        repr=False,
     )
 
 
@@ -244,19 +251,31 @@ def _apply_video_overrides(
         if name in args:
             setattr(cfg.video, name, args[name])
 
-    if args.get("no_video"):
-        cfg.video.create_video = False
-    if args.get("no_intro"):
-        cfg.video.intro_enabled = False
-    if args.get("final_only"):
-        cfg.video.final_only = True
+    flag_overrides = {
+        "no_video": ("create_video", False),
+        "no_intro": ("intro_enabled", False),
+        "final_only": ("final_only", True),
+    }
+    for flag, (attr, value) in flag_overrides.items():
+        if args.get(flag):
+            setattr(cfg.video, attr, value)
 
-    if "intro_duration" in args:
-        cfg.video.intro_duration_seconds = max(args["intro_duration"], 0.0)
-    if "outro_duration" in args:
-        cfg.video.outro_duration_seconds = max(args["outro_duration"], 0.0)
+    duration_overrides = {
+        "intro_duration": "intro_duration_seconds",
+        "outro_duration": "outro_duration_seconds",
+    }
+    for key, attr in duration_overrides.items():
+        if key in args:
+            setattr(cfg.video, attr, max(args[key], 0.0))
+
     if "final_frame_compare" in args:
         cfg.video.final_frame_compare = args["final_frame_compare"]
+    if "video_mode" in args:
+        cfg.video.mode = args["video_mode"]
+        cfg.video.mode_override = True
+
+    if not cfg.video.mode_override and cfg.video.mode != DEFAULT_VIDEO_MODE:
+        cfg.video.mode_override = True
 
 
 def _apply_hardware_overrides(

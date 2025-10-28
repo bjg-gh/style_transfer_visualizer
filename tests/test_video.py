@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Self
+from typing import Self, cast
 from unittest.mock import patch
 
 import numpy as np
@@ -12,9 +12,14 @@ from PIL import Image
 
 import style_transfer_visualizer.video as stv_video
 from style_transfer_visualizer.config import VideoConfig
+from style_transfer_visualizer.config_defaults import DEFAULT_VIDEO_QUALITY
+from style_transfer_visualizer.type_defs import VideoMode
 
 DEFAULT_INTRO_DURATION = 0.0
 DEFAULT_OUTRO_DURATION = 0.0
+EXPECTED_CAPTURED_FRAMES = 2
+AUTO_SWITCH_STEPS = 2000
+OVERRIDE_STEPS = 5000
 
 
 class DummyWriter:
@@ -22,10 +27,17 @@ class DummyWriter:
 
     def __init__(self) -> None:
         self.frames: list[np.ndarray] = []
+        self._size: tuple[int, int] | None = None
 
     def append_data(self, frame: np.ndarray) -> None:
         """Record a frame for later assertions."""
-        self.frames.append(frame)
+        rgb = np.asarray(frame, dtype=np.uint8)
+        self._size = (rgb.shape[1], rgb.shape[0])
+        self.frames.append(rgb)
+
+    def close(self) -> None:
+        """No-op close method to satisfy writer protocol."""
+        return
 
 
 class _SizedDummyWriter(DummyWriter):
@@ -33,7 +45,19 @@ class _SizedDummyWriter(DummyWriter):
 
     def __init__(self, size: tuple[int, int]) -> None:
         super().__init__()
-        self._size: tuple[int, int] = size
+        self._size: tuple[int, int] | None = size
+
+
+def _reason_config(*, save_every: int = 1, fps: int = 10) -> VideoConfig:
+    """Build a VideoConfig instance for auto-detection tests."""
+    return VideoConfig(
+        save_every=save_every,
+        fps=fps,
+        quality=DEFAULT_VIDEO_QUALITY,
+        mode="realtime",
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+    )
 
 
 def test_setup_video_writer_returns_none_when_disabled() -> None:
@@ -45,6 +69,7 @@ def test_setup_video_writer_returns_none_when_disabled() -> None:
         create_video=False,
         intro_duration_seconds=DEFAULT_INTRO_DURATION,
         outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
     )
     result = stv_video.setup_video_writer(cfg, Path(), "test.mp4")
     assert result is None
@@ -59,6 +84,7 @@ def test_writer_called_with_correct_args(tmp_path: Path) -> None:
         create_video=True,
         intro_duration_seconds=DEFAULT_INTRO_DURATION,
         outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
     )
 
     with patch(
@@ -95,6 +121,7 @@ def test_writer_uses_custom_title_and_artist_when_provided(
         metadata_artist="Custom Artist",
         intro_duration_seconds=DEFAULT_INTRO_DURATION,
         outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
     )
     with patch(
         "style_transfer_visualizer.video.imageio.get_writer",
@@ -117,6 +144,7 @@ def test_writer_non_mp4_has_no_metadata(tmp_path: Path) -> None:
         create_video=True,
         intro_duration_seconds=DEFAULT_INTRO_DURATION,
         outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
     )
 
     with patch("style_transfer_visualizer.video.imageio.get_writer") as mock_w:
@@ -125,6 +153,275 @@ def test_writer_non_mp4_has_no_metadata(tmp_path: Path) -> None:
         _, kwargs = mock_w.call_args
         params: list[str] = kwargs.get("ffmpeg_params", [])
         assert params == []
+
+
+def test_ensure_rgb_uint8_converts_dtype() -> None:
+    """Helper should coerce non-uint8 frames before writing."""
+    max_val = float(np.iinfo(np.uint8).max)
+    float_frame = np.full((2, 2, 3), max_val, dtype=np.float32)
+
+    result = stv_video._ensure_rgb_uint8(float_frame)  # noqa: SLF001
+
+    assert result.dtype == np.uint8
+    assert int(result[0, 0, 0]) == np.iinfo(np.uint8).max
+
+
+def test_setup_video_writer_returns_postprocess_writer_when_mode_postprocess(
+    tmp_path: Path,
+) -> None:
+    """Selecting postprocess mode should return the collecting writer."""
+    cfg = VideoConfig(
+        fps=12,
+        quality=7,
+        save_every=5,
+        create_video=True,
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="postprocess",
+    )
+    writer = stv_video.setup_video_writer(cfg, tmp_path, "timelapse.mp4")
+    assert isinstance(writer, stv_video.PostprocessVideoWriter)
+
+
+def test_setup_video_writer_rejects_unknown_mode(tmp_path: Path) -> None:
+    """Unsupported modes should raise a clear error."""
+    cfg = VideoConfig(
+        fps=12,
+        quality=7,
+        save_every=1,
+        create_video=True,
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
+    )
+    cfg.mode = cast(VideoMode, "bogus")  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="Unsupported video mode"):
+        stv_video.setup_video_writer(cfg, tmp_path, "video.mp4")
+
+
+def test_postprocess_writer_collects_and_encodes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Postprocess writer should flush collected frames via helper."""
+    cfg = VideoConfig(
+        fps=12,
+        quality=7,
+        save_every=1,
+        create_video=True,
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="postprocess",
+    )
+    sink = stv_video.setup_video_writer(cfg, tmp_path, "video.mp4")
+    assert isinstance(sink, stv_video.PostprocessVideoWriter)
+
+    frame_a = np.zeros((32, 48, 3), dtype=np.uint8)
+    frame_b = np.ones((32, 48, 3), dtype=np.uint8) * 127
+    sink.append_data(frame_a)
+    sink.append_data(frame_b)
+
+    captured: list[np.ndarray] = []
+
+    class FakeWriter(DummyWriter):
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(
+            self,
+            _exc_type: object,
+            _exc: object,
+            _tb: object,
+        ) -> bool:
+            return False
+
+        def append_data(self, frame: np.ndarray) -> None:
+            captured.append(np.asarray(frame, dtype=np.uint8))
+
+    monkeypatch.setattr(
+        stv_video,
+        "_open_imageio_writer",
+        lambda *_args, **_kwargs: FakeWriter(),
+    )
+
+    sink.close()
+
+    assert len(captured) == EXPECTED_CAPTURED_FRAMES
+    np.testing.assert_array_equal(captured[0], frame_a)
+    np.testing.assert_array_equal(captured[1], frame_b)
+    assert not list(tmp_path.glob("stv_frames_*"))
+
+
+def test_postprocess_writer_close_guards_after_close(tmp_path: Path) -> None:
+    """Postprocess writer should ignore double close and reject new frames."""
+    cfg = VideoConfig(
+        fps=12,
+        quality=7,
+        save_every=1,
+        create_video=True,
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="postprocess",
+    )
+    writer = stv_video.PostprocessVideoWriter(cfg, tmp_path / "video.mp4")
+
+    writer.close()
+    writer.close()  # second call should be a no-op
+
+    with pytest.raises(RuntimeError, match="closed"):
+        writer.append_data(np.zeros((4, 4, 3), dtype=np.uint8))
+
+
+def test_select_video_mode_auto_switches() -> None:
+    """Heuristic should move to postprocess for long high-res runs."""
+    cfg = VideoConfig(
+        save_every=1,
+        fps=12,
+        quality=DEFAULT_VIDEO_QUALITY,
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
+    )
+    mode, reason, frames = stv_video.select_video_mode(
+        cfg,
+        frame_size=(3840, 2160),
+        total_steps=AUTO_SWITCH_STEPS,
+    )
+    assert mode == "postprocess"
+    assert reason is not None
+    assert frames == AUTO_SWITCH_STEPS
+
+
+def test_select_video_mode_respects_explicit_override() -> None:
+    """Explicitly configured modes should not be overridden."""
+    cfg = VideoConfig(
+        save_every=1,
+        fps=60,
+        quality=DEFAULT_VIDEO_QUALITY,
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
+        mode_override=True,
+    )
+    mode, reason, frames = stv_video.select_video_mode(
+        cfg,
+        frame_size=(4096, 2160),
+        total_steps=OVERRIDE_STEPS,
+    )
+    assert mode == "realtime"
+    assert reason is None
+    assert frames == OVERRIDE_STEPS
+
+
+def test_auto_postprocess_reason_handles_zero_save_every() -> None:
+    """Heuristic should return early when save_every is invalid."""
+    cfg = _reason_config()
+    cfg.save_every = 0
+
+    reason, frames = stv_video._auto_postprocess_reason(  # noqa: SLF001
+        cfg,
+        frame_size=(640, 480),
+        total_steps=100,
+    )
+
+    assert reason is None
+    assert frames == 0
+
+
+def test_auto_postprocess_reason_handles_zero_frames() -> None:
+    """No estimated frames should skip postprocess recommendation."""
+    cfg = _reason_config()
+
+    reason, frames = stv_video._auto_postprocess_reason(  # noqa: SLF001
+        cfg,
+        frame_size=(640, 480),
+        total_steps=0,
+    )
+
+    assert reason is None
+    assert frames == 0
+
+
+def test_auto_postprocess_reason_handles_invalid_dimensions() -> None:
+    """Non-positive dimensions should bypass heuristic."""
+    cfg = _reason_config()
+    total_steps = 50
+
+    reason, frames = stv_video._auto_postprocess_reason(  # noqa: SLF001
+        cfg,
+        frame_size=(0, 480),
+        total_steps=total_steps,
+    )
+
+    assert reason is None
+    assert frames == total_steps
+
+
+def test_auto_postprocess_reason_ultra_high_res() -> None:
+    """4K-class runs should be promoted when thresholds are met."""
+    cfg = _reason_config()
+    total_steps = stv_video._AUTO_ULTRA_RES_FRAME_THRESHOLD  # noqa: SLF001
+
+    reason, frames = stv_video._auto_postprocess_reason(  # noqa: SLF001
+        cfg,
+        frame_size=(3840, 2160),
+        total_steps=total_steps,
+    )
+
+    assert reason is not None
+    assert "4K-class" in reason
+    assert frames == total_steps
+
+
+def test_auto_postprocess_reason_high_res() -> None:
+    """High-resolution but sub-4K runs should trigger the high-res branch."""
+    cfg = _reason_config()
+    total_steps = stv_video._AUTO_HIGH_RES_FRAME_THRESHOLD  # noqa: SLF001
+
+    reason, frames = stv_video._auto_postprocess_reason(  # noqa: SLF001
+        cfg,
+        frame_size=(1920, 1080),
+        total_steps=total_steps,
+    )
+
+    assert reason is not None
+    assert "high-res" in reason
+    assert frames == total_steps
+
+
+def test_auto_postprocess_reason_high_fps() -> None:
+    """High frame-rate runs can also trigger postprocess mode."""
+    cfg = _reason_config(
+        fps=stv_video._AUTO_HIGH_FPS_THRESHOLD,  # noqa: SLF001
+    )
+    total_steps = stv_video._AUTO_HIGH_FPS_FRAME_THRESHOLD  # noqa: SLF001
+
+    reason, frames = stv_video._auto_postprocess_reason(  # noqa: SLF001
+        cfg,
+        frame_size=(800, 600),
+        total_steps=total_steps,
+    )
+
+    assert reason is not None
+    assert "fps" in reason
+    assert frames == total_steps
+
+
+def test_auto_postprocess_reason_dense_sampling() -> None:
+    """Frequent frame dumps should trigger the save-every branch."""
+    cfg = _reason_config(save_every=1, fps=10)
+    total_steps = stv_video._AUTO_SAVE_EVERY_FRAME_THRESHOLD  # noqa: SLF001
+
+    reason, frames = stv_video._auto_postprocess_reason(  # noqa: SLF001
+        cfg,
+        frame_size=(320, 240),
+        total_steps=total_steps,
+    )
+
+    assert reason is not None
+    assert "--save-every" in reason
+    assert frames == total_steps
 
 
 def test_blend_frames_shape_mismatch_raises() -> None:
@@ -243,6 +540,7 @@ def test_prepare_intro_segment_returns_none_when_intro_disabled(
         intro_enabled=False,
         intro_duration_seconds=DEFAULT_INTRO_DURATION,
         outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
     )
     writer = DummyWriter()
     result = stv_video.prepare_intro_segment(
@@ -268,6 +566,7 @@ def test_prepare_intro_segment_generates_frames(
         intro_enabled=True,
         intro_duration_seconds=0.2,
         outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
     )
     writer = DummyWriter()
     info = stv_video.prepare_intro_segment(
@@ -353,6 +652,7 @@ def test_append_final_comparison_frame_skips_when_disabled(
         final_frame_compare=False,
         intro_duration_seconds=DEFAULT_INTRO_DURATION,
         outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
     )
     writer = DummyWriter()
     last_frame = np.zeros((64, 64, 3), dtype=np.uint8)
@@ -382,6 +682,7 @@ def test_append_final_comparison_frame_appends_when_enabled(
         final_frame_compare=True,
         intro_duration_seconds=DEFAULT_INTRO_DURATION,
         outro_duration_seconds=0.2,
+        mode="realtime",
     )
     writer = DummyWriter()
     last_frame = np.zeros((64, 64, 3), dtype=np.uint8)
@@ -447,6 +748,7 @@ def test_append_final_comparison_frame_validates_shape(
         final_frame_compare=True,
         intro_duration_seconds=DEFAULT_INTRO_DURATION,
         outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
     )
     writer = DummyWriter()
     last_frame = np.zeros((10, 10), dtype=np.uint8)

@@ -10,6 +10,7 @@ import style_transfer_visualizer.optimization as stv_optimizer
 import style_transfer_visualizer.runtime as stv_runtime
 import style_transfer_visualizer.video as stv_video
 from style_transfer_visualizer.config import StyleTransferConfig
+from style_transfer_visualizer.logging_utils import logger
 from style_transfer_visualizer.type_defs import (
     InputPaths,
     SaveOptions,
@@ -45,6 +46,26 @@ def style_transfer(
         device,
         normalize=config.optimization.normalize,
     )
+
+    if config.video.create_video:
+        height, width = content_img.shape[-2:]
+        frame_size = (int(width), int(height))
+        effective_mode, reason, frame_estimate = stv_video.select_video_mode(
+            config.video,
+            frame_size=frame_size,
+            total_steps=config.optimization.steps,
+        )
+        if effective_mode != config.video.mode:
+            config.video.mode = effective_mode
+        if reason is not None:
+            logger.info(
+                (
+                    "Auto-selected postprocess video mode (%s). "
+                    "Estimated frames: %d."
+                ),
+                reason,
+                frame_estimate,
+            )
 
     # Prepare model and optimizer
     model, input_img, optimizer = stv_core_model.prepare_model_and_input(

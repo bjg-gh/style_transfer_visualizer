@@ -12,6 +12,7 @@ import torch
 
 InitMethod = Literal["content", "random", "white"]
 LayoutName = Literal["gallery-stacked-left", "gallery-two-across"]
+VideoMode = Literal["realtime", "postprocess"]
 LossHistory = dict[str, list[float]]
 TensorList = list[torch.Tensor]
 

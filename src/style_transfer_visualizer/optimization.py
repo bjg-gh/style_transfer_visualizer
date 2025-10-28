@@ -6,7 +6,6 @@ from collections.abc import Callable, Mapping  # noqa: TC003
 from dataclasses import dataclass
 from typing import Protocol
 
-import imageio  # noqa: TC002
 import numpy as np  # noqa: TC002
 import torch
 from torch import nn
@@ -81,7 +80,7 @@ class OptimizationRunner:
         optimizer_factory: Callable[[torch.Tensor], Optimizer] | None = None,
         progress_bar: ProgressReporter | None = None,
         callbacks: OptimizationCallbacks | None = None,
-        video_writer: imageio.plugins.ffmpeg.FfmpegFormat.Writer | None = None,
+        video_writer: stv_video.VideoFrameSink | None = None,
         intro_last_frame: np.ndarray | None = None,
         intro_crossfade_frames: int = 0,
     ) -> None:

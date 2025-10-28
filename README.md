@@ -93,6 +93,7 @@ Use `uv run compare-grid --help` to see all layout, sizing, and framing options.
 - `--outro-duration N` (seconds to hold the outro comparison frame, default: 10)
 - `--no-intro` (skip the intro comparison segment)
 - `--no-final-frame-compare` (skip the outro comparison segment)
+- `--video-mode {realtime,postprocess}` (stream frames directly or defer encoding)
 - `--device cpu|cuda`
 - `--seed`
 - `--config config.toml`
@@ -127,6 +128,19 @@ of the content, style, and result images:
 
 These options map to `video.intro_enabled`, `video.intro_duration_seconds`,
 `video.final_frame_compare`, and `video.outro_duration_seconds` in TOML configs.
+
+## Video Encoding Modes
+
+The default `realtime` mode streams frames directly into ffmpeg as the optimizer
+produces them. This keeps disk usage low, but heavy runs can stall when the GPU
+waits for encoding. Switch to `--video-mode postprocess` to cache frames on disk
+and encode the video once optimization completes.
+
+When you leave `--video-mode` unset the CLI keeps the realtime behavior unless
+it predicts a run will generate a large number of high-resolution frames
+(roughly >=1600 frames overall, >=500 at 1080p, or >=280 4K-class frames). If
+the heuristic triggers the logger explains the decision, and you can always
+override it with `--video-mode realtime`.
 
 ---
 

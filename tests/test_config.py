@@ -107,6 +107,7 @@ def test_video_config_invalid_fps() -> None:
             save_every=DEFAULT_SAVE_EVERY,
             intro_duration_seconds=DEFAULT_VIDEO_INTRO_DURATION,
             outro_duration_seconds=DEFAULT_VIDEO_OUTRO_DURATION,
+            mode="realtime",
         )
     assert "fps" in str(exc_info.value)
 
@@ -120,6 +121,7 @@ def test_video_config_invalid_quality() -> None:
             save_every=DEFAULT_SAVE_EVERY,
             intro_duration_seconds=DEFAULT_VIDEO_INTRO_DURATION,
             outro_duration_seconds=DEFAULT_VIDEO_OUTRO_DURATION,
+            mode="realtime",
         )
     assert "quality" in str(exc_info.value)
 
@@ -203,8 +205,45 @@ def test_video_config_fps_upper_bound() -> None:
             save_every=DEFAULT_SAVE_EVERY,
             intro_duration_seconds=DEFAULT_VIDEO_INTRO_DURATION,
             outro_duration_seconds=DEFAULT_VIDEO_OUTRO_DURATION,
+            mode="realtime",
         )
     assert "fps" in str(exc_info.value)
+
+
+def test_build_config_sets_mode_override_for_base_config() -> None:
+    """Base configs with non-default video mode should mark override."""
+    base_cfg = stv_config.StyleTransferConfig.model_validate({})
+    base_cfg.video.mode = "postprocess"
+    base_cfg.video.mode_override = False
+
+    cfg = stv_config.build_config_from_cli({}, base_config=base_cfg)
+
+    assert cfg.video.mode == "postprocess"
+    assert cfg.video.mode_override is True
+
+
+def test_apply_video_overrides_sets_override_for_existing_mode() -> None:
+    """Direct helper should mark override when mode differs from default."""
+    cfg = stv_config.StyleTransferConfig.model_validate({})
+    cfg.video.mode = "postprocess"
+    cfg.video.mode_override = False
+
+    stv_config._apply_video_overrides(cfg, {})  # noqa: SLF001
+
+    assert cfg.video.mode_override is True
+
+
+def test_apply_video_overrides_cli_argument_sets_mode() -> None:
+    """CLI video_mode should set mode and mark override."""
+    cfg = stv_config.StyleTransferConfig.model_validate({})
+
+    stv_config._apply_video_overrides(  # noqa: SLF001
+        cfg,
+        {"video_mode": "postprocess"},
+    )
+
+    assert cfg.video.mode == "postprocess"
+    assert cfg.video.mode_override is True
 
 
 def test_output_config_defaults() -> None:
