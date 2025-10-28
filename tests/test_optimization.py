@@ -289,9 +289,15 @@ class TestOptimization:
         class MemoryWriter:
             def __init__(self) -> None:
                 self.frames: list[np.ndarray] = []
+                self._size: tuple[int, int] | None = None
 
             def append_data(self, frame: np.ndarray) -> None:
-                self.frames.append(frame)
+                rgb = np.asarray(frame, dtype=np.uint8)
+                self._size = (rgb.shape[1], rgb.shape[0])
+                self.frames.append(rgb)
+
+            def close(self) -> None:
+                return None
 
         writer = MemoryWriter()
         calls: dict[str, object] = {}
@@ -738,9 +744,15 @@ class TestOptimization:
         class MemoryWriter:
             def __init__(self) -> None:
                 self.frames: list[np.ndarray] = []
+                self._size: tuple[int, int] | None = None
 
             def append_data(self, frame: np.ndarray) -> None:
-                self.frames.append(frame)
+                rgb = np.asarray(frame, dtype=np.uint8)
+                self._size = (rgb.shape[1], rgb.shape[0])
+                self.frames.append(rgb)
+
+            def close(self) -> None:
+                return None
 
         writer = MemoryWriter()
 

@@ -185,6 +185,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Custom artist/author to embed in MP4 metadata",
         default=argparse.SUPPRESS,
     )
+    video.add_argument(
+        "--video-mode",
+        choices=["realtime", "postprocess"],
+        help=(
+            "Video encoding strategy: realtime streams frames directly, "
+            "postprocess defers encoding until after optimization. When "
+            "omitted the CLI may auto-switch to postprocess for long runs."
+        ),
+        default=argparse.SUPPRESS,
+    )
 
     hw = p.add_argument_group("hardware")
     hw.add_argument(
@@ -237,6 +247,7 @@ def log_parameters(
         "Final Frame Compare: %s",
         "Enabled" if cfg.video.final_frame_compare else "Disabled",
     )
+    logger.info("Video Mode: %s", cfg.video.mode)
     logger.info("Loss Plotting: %s",
                 "Enabled" if cfg.output.plot_losses else "Disabled")
     logger.info("Random Seed: %d", cfg.optimization.seed)

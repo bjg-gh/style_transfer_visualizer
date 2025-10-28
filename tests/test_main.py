@@ -100,6 +100,77 @@ def test_style_transfer_minimal(monkeypatch: MonkeyPatch) -> None:
     assert result.shape == dummy_tensor.shape
 
 
+def test_style_transfer_auto_selects_postprocess(
+    monkeypatch: MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Video mode should switch and log when heuristic recommends it."""
+    dummy_tensor = torch.rand(1, 3, 64, 96)
+
+    monkeypatch.setattr(
+        stv_image_io,
+        "load_image_to_tensor",
+        lambda *_a, **_kw: dummy_tensor,
+    )
+    monkeypatch.setattr(
+        stv_core_model,
+        "prepare_model_and_input",
+        lambda *_a, **_kw: ("model", dummy_tensor.clone(), "optimizer"),
+    )
+    patch_runner(
+        monkeypatch,
+        run_result=(dummy_tensor.clone(), {"total_loss": []}, 0.1),
+    )
+
+    class DummyWriter:
+        def __init__(self) -> None:
+            self._size: tuple[int, int] | None = None
+
+        def append_data(self, frame: np.ndarray) -> None:
+            self._size = (frame.shape[1], frame.shape[0])
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        stv_video,
+        "setup_video_writer",
+        lambda *_a, **_kw: DummyWriter(),
+    )
+    monkeypatch.setattr(stv_video, "prepare_intro_segment", lambda *_a, **_kw: None)
+    monkeypatch.setattr(stv_video, "append_final_comparison_frame", lambda *_a, **_kw: None)
+    monkeypatch.setattr(
+        stv_video,
+        "select_video_mode",
+        lambda *_a, **_kw: ("postprocess", "heavy test run", 42),
+    )
+
+    monkeypatch.setattr(stv_runtime, "validate_input_paths", lambda *_a, **_kw: None)
+    monkeypatch.setattr(stv_runtime, "validate_parameters", lambda *_a, **_kw: None)
+    monkeypatch.setattr(stv_runtime, "setup_random_seed", lambda *_a, **_kw: None)
+    monkeypatch.setattr(stv_runtime, "setup_device", lambda *_a, **_kw: "cpu")
+    monkeypatch.setattr(
+        stv_runtime,
+        "setup_output_directory",
+        lambda *_a, **_kw: Path("mock_output"),
+    )
+    monkeypatch.setattr(stv_runtime, "save_outputs", lambda *_a, **_kw: None)
+
+    cfg = _base_config()
+    cfg.video.final_frame_compare = False
+
+    paths = InputPaths(content_path="foo.png", style_path="bar.png")
+
+    with caplog.at_level("INFO"):
+        stv_main.style_transfer(paths, cfg)
+
+    assert cfg.video.mode == "postprocess"
+    assert any(
+        "Auto-selected postprocess video mode" in record.message
+        for record in caplog.records
+    )
+
+
 def test_style_transfer_no_plot(monkeypatch: MonkeyPatch) -> None:
     """Test style_transfer() with plotting disabled."""
     dummy_tensor = torch.rand(1, 3, 256, 256)
