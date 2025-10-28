@@ -306,3 +306,11 @@ def test_build_config_from_cli_loads_config(tmp_path: Path) -> None:
 
     assert seen["path"] == str(config_path)
     assert cfg.output.output == "cli"
+
+
+def test_style_config_variant_fixture(style_config_variant: stv_config.StyleTransferConfig) -> None:
+    """Fixture provides ready-to-use config variants with unique outputs."""
+    output_path = Path(style_config_variant.output.output)
+    assert output_path.exists()
+    assert style_config_variant.video.mode in {"realtime", "postprocess"}
+    assert isinstance(style_config_variant.hardware.device, str)
