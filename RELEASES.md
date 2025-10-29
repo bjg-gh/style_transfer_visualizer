@@ -1,5 +1,12 @@
 # Release Notes
 
+## Unreleased
+
+### Added
+
+- CLI/video: optional GIF export via `--gif`, with `--gif-include-intro` and
+  `--gif-include-outro` flags to control segment inclusion.
+
 ## v1.1.0 — 2025-08-27
 
 **Milestone:** v1.1 Core Refactor
@@ -9,6 +16,7 @@ maintainability, configuration clarity, and developer workflows,
 while preserving full functionality and 100% test coverage.
 
 ### Highlights
+
 - Refactored into a clean CLI package with `cli.py` as entry point
 - Split monolithic script into multiple focused modules (`core_model`,
   `optimization`, `video`, `image_io`, `utils`, etc.) for clarity and
@@ -30,6 +38,7 @@ while preserving full functionality and 100% test coverage.
 - Maintained 100% pytest coverage across all modules
 
 ### Changelog
+
 - Core: `main.py` orchestration simplified and tested
 - Refactor: replaced single script with modular package structure
 - CLI: new argument groups (output, optimization, video, hardware, config)
@@ -47,12 +56,14 @@ while preserving full functionality and 100% test coverage.
 This patch includes infrastructure and workflow refinements to streamline solo development and reduce CI load.
 
 ### Highlights
+
 - Added comprehensive `WORKFLOW.md` with branching and project tracking guidelines
 - Skipped CI for documentation-only commits
 - Adopted squash merge as default strategy
 - Fixed README release badge
 
 ### Changelog
+
 - Docs: added effort/priority scale, clarified git practices
 - CI: updated `python-ci.yml` with `paths-ignore`
 - Maintenance: removed PR clutter from project board
@@ -66,6 +77,7 @@ This patch includes infrastructure and workflow refinements to streamline solo d
 This release formalized the project’s structure and exposed it to the public with full CI and documentation support.
 
 ### Highlights
+
 - Added GitHub Actions workflow with Codecov
 - Introduced README badges for release and coverage
 - Split requirements into core, CUDA, and lockfile variants
@@ -80,6 +92,7 @@ This release formalized the project’s structure and exposed it to the public w
 The initial version of the Neural Style Transfer Visualizer.
 
 ### Features
+
 - PyTorch-based neural style transfer using VGG19
 - Command-line interface with rich configuration options
 - Timelapse video output with loss visualization

@@ -19,8 +19,11 @@ import style_transfer_visualizer.config as stv_config
 from style_transfer_visualizer.config_defaults import (
     DEFAULT_CONTENT_LAYERS,
     DEFAULT_CONTENT_WEIGHT,
+    DEFAULT_CREATE_GIF,
     DEFAULT_DEVICE,
     DEFAULT_FPS,
+    DEFAULT_GIF_INCLUDE_INTRO,
+    DEFAULT_GIF_INCLUDE_OUTRO,
     DEFAULT_INIT_METHOD,
     DEFAULT_LEARNING_RATE,
     DEFAULT_LOG_EVERY,
@@ -264,6 +267,9 @@ def test_loader_with_empty_toml_uses_all_defaults() -> None:
     assert cfg.optimization.lr == DEFAULT_LEARNING_RATE
     assert cfg.video.fps == DEFAULT_FPS
     assert cfg.video.quality == DEFAULT_VIDEO_QUALITY
+    assert cfg.video.create_gif == DEFAULT_CREATE_GIF
+    assert cfg.video.gif_include_intro == DEFAULT_GIF_INCLUDE_INTRO
+    assert cfg.video.gif_include_outro == DEFAULT_GIF_INCLUDE_OUTRO
     assert cfg.hardware.device == DEFAULT_DEVICE
     assert cfg.video.outro_duration_seconds == DEFAULT_VIDEO_OUTRO_DURATION
     assert cfg.output.output == DEFAULT_OUTPUT_DIR

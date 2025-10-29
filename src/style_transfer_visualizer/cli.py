@@ -186,6 +186,37 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=argparse.SUPPRESS,
     )
     video.add_argument(
+        "--gif",
+        dest="create_gif",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help=(
+            "Also export a GIF timelapse (intro/outro segments are skipped "
+            "unless explicitly included)."
+        ),
+    )
+    video.add_argument(
+        "--no-gif",
+        dest="create_gif",
+        action="store_false",
+        default=argparse.SUPPRESS,
+        help="Disable GIF export even when enabled via config.",
+    )
+    video.add_argument(
+        "--gif-include-intro",
+        dest="gif_include_intro",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="Include the intro comparison segment in GIF output.",
+    )
+    video.add_argument(
+        "--gif-include-outro",
+        dest="gif_include_outro",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="Include the outro comparison segment in GIF output.",
+    )
+    video.add_argument(
         "--video-mode",
         choices=["realtime", "postprocess"],
         help=(
@@ -247,6 +278,19 @@ def log_parameters(
         "Final Frame Compare: %s",
         "Enabled" if cfg.video.final_frame_compare else "Disabled",
     )
+    logger.info(
+        "GIF Export: %s",
+        "Enabled" if cfg.video.create_gif else "Disabled",
+    )
+    if cfg.video.create_gif:
+        logger.info(
+            "GIF Intro Included: %s",
+            "Yes" if cfg.video.gif_include_intro else "No",
+        )
+        logger.info(
+            "GIF Outro Included: %s",
+            "Yes" if cfg.video.gif_include_outro else "No",
+        )
     logger.info("Video Mode: %s", cfg.video.mode)
     logger.info("Loss Plotting: %s",
                 "Enabled" if cfg.output.plot_losses else "Disabled")

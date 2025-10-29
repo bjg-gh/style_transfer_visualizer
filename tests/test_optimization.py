@@ -352,6 +352,55 @@ class TestOptimization:
         expected_min_frames = 2
         assert len(writer.frames) >= expected_min_frames
 
+    def test_runner_emits_gif_frames_when_enabled(
+        self,
+        setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
+        make_runner_config: Callable[..., StyleTransferConfig],
+    ) -> None:
+        """GIF collector should receive frames when configured."""
+        model, _, _, input_img = setup_model_and_images
+        optimizer = torch.optim.Adam([input_img])
+
+        class MemoryCollector:
+            def __init__(self) -> None:
+                self.frames: list[np.ndarray] = []
+                self._size: tuple[int, int] | None = None
+
+            def append_data(self, frame: np.ndarray) -> None:
+                rgb = np.asarray(frame, dtype=np.uint8)
+                self._size = (rgb.shape[1], rgb.shape[0])
+                self.frames.append(rgb)
+
+            def close(self) -> None:
+                return None
+
+        gif_collector = MemoryCollector()
+        config = make_runner_config(
+            video={
+                "save_every": 1,
+                "create_video": False,
+                "create_gif": True,
+                "gif_include_intro": True,
+            },
+        )
+
+        height, width = input_img.shape[-2:]
+        intro_frame = np.zeros((height, width, 3), dtype=np.uint8)
+
+        runner = stv_optimization.OptimizationRunner(
+            model,
+            input_img,
+            config,
+            optimizer=optimizer,
+            gif_collector=gif_collector,
+            intro_last_frame=intro_frame,
+            intro_crossfade_frames=2,
+        )
+
+        runner.run()
+
+        assert gif_collector.frames, "GIF collector should capture frames"
+
     def test_runner_csv_logger_failure_logs_error(
         self,
         setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],

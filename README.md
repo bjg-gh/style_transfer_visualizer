@@ -89,6 +89,12 @@ Use `uv run compare-grid --help` to see all layout, sizing, and framing options.
 - `--init-method {random,white,content}`
 - `--fps`, `--quality`
 - `--no-normalize`, `--no-video`, `--final-only`
+- `--gif`, `--gif-include-intro`, `--gif-include-outro`, `--no-gif`
+
+Enable `--gif` to emit an animated timelapse alongside the MP4. The GIF skips
+intro/outro overlays unless you opt in with `--gif-include-intro` or
+`--gif-include-outro`.
+
 - `--intro-duration N` (seconds to show the intro comparison frame, default: 10)
 - `--outro-duration N` (seconds to hold the outro comparison frame, default: 10)
 - `--no-intro` (skip the intro comparison segment)

@@ -73,12 +73,25 @@ class TestCLIArgumentParsing:
             "--no-video",
             "--final-only",
             "--no-plot",
+            "--gif",
+            "--gif-include-intro",
+            "--gif-include-outro",
         ])
 
         assert args.no_normalize is True
         assert args.no_video is True
         assert args.final_only is True
         assert args.no_plot is True
+        assert args.create_gif is True
+        assert args.gif_include_intro is True
+        assert args.gif_include_outro is True
+
+        args_no_gif = parser.parse_args([
+            "--content", "c.jpg",
+            "--style", "s.jpg",
+            "--no-gif",
+        ])
+        assert args_no_gif.create_gif is False
 
     def test_required_args_missing(self, monkeypatch: MonkeyPatch) -> None:
         """Test that missing required arguments triggers SystemExit."""
@@ -219,6 +232,9 @@ class TestCLIRunFromArgs:
             no_intro=False,
             intro_duration=-5.0,
             outro_duration=-5.0,
+            create_gif=True,
+            gif_include_intro=True,
+            gif_include_outro=True,
             compare_inputs=False,
             compare_result=False,
         )
@@ -250,6 +266,9 @@ class TestCLIRunFromArgs:
         assert cfg.video.intro_enabled is True
         assert cfg.video.intro_duration_seconds == 0.0
         assert cfg.video.outro_duration_seconds == 0.0
+        assert cfg.video.create_gif is True
+        assert cfg.video.gif_include_intro is True
+        assert cfg.video.gif_include_outro is True
         assert cfg.optimization.init_method == "white"
         assert cfg.output.output == "out"
 
@@ -700,6 +719,28 @@ class TestLogParameters:
 
         assert any("Loaded config from: abc.toml"
                    in m for m in caplog.messages)
+
+    def test_log_parameters_reports_gif_settings(
+        self,
+        caplog: LogCaptureFixture,
+        make_style_transfer_config: Callable[..., StyleTransferConfig],
+        make_input_paths: Callable[..., InputPaths],
+    ) -> None:
+        """GIF-related log entries should reflect config flags."""
+        args = argparse.Namespace(content="cat.jpg", style="s.jpg", config=None)
+        cfg = make_style_transfer_config(
+            video={
+                "create_gif": True,
+                "gif_include_intro": True,
+                "gif_include_outro": True,
+            },
+        )
+        paths = make_input_paths(content=args.content, style=args.style)
+        caplog.set_level("INFO")
+        stv_cli.log_parameters(paths, cfg, args)
+        assert any("GIF Export: Enabled" in msg for msg in caplog.messages)
+        assert any("GIF Intro Included: Yes" in msg for msg in caplog.messages)
+        assert any("GIF Outro Included: Yes" in msg for msg in caplog.messages)
 
     def test_log_parameters_without_config(
         self,
