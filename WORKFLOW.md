@@ -16,6 +16,7 @@ Use the GitHub UI to create an issue for each new task, enhancement, or bug.
 
 <!-- effort-scale -->
 ### Effort Scale (1-5)
+
 | Effort | Time Estimate         | Description                              |
 |--------|-----------------------|------------------------------------------|
 | 1      | ~30 min – 1 hour      | Trivial task, minor doc or config change |
@@ -26,6 +27,7 @@ Use the GitHub UI to create an issue for each new task, enhancement, or bug.
 
 <!-- priority-criteria -->
 ### Priority Criteria
+
 | Priority | Meaning                                        | Examples                            |
 |----------|------------------------------------------------|-------------------------------------|
 | High     | Blocks milestones or core functionality        | Core features, critical refactors   |
@@ -37,24 +39,29 @@ Use the GitHub UI to create an issue for each new task, enhancement, or bug.
 ## 2. Create a Branch for Each Fix or Feature
 
 ### Naming Convention (GitHub Default Style)
+
 Use the format:
-```
+
+```text
 <issue-number>-<lowercase-dash-separated-title>
 ```
 
 **Example:**
-```
+
+```text
 3-docs-add-workflowmd
 ```
 
 This convention keeps branches traceable and consistent with GitHub’s automatic branch suggestion UI.
 
 ### Preferred Method (GitHub UI)
+
 - Navigate to the repo main page
 - Open the branch dropdown and accept the default. Edit if you need to.
 - Click **Create branch from `main`**
 
 ### Alternate Method (Terminal)
+
 ```sh
 git checkout main
 git pull origin main
@@ -67,13 +74,15 @@ git checkout -b 3-docs-add-workflowmd
 
 Work on your fix or feature locally. When you're ready to commit, use a **short, conventional commit message**.
 
-### Example:
+### Example
+
 ```sh
 git add .
 git commit -m "docs: fix broken release badge in README"
 ```
 
 If you're committing only documentation and want to skip CI:
+
 ```sh
 git commit -m "docs: update README [skip ci]"
 ```
@@ -83,6 +92,7 @@ git commit -m "docs: update README [skip ci]"
 ## 4. Push Your Branch
 
 Push your branch to GitHub:
+
 ```sh
 git push origin <your-branch-name>
 ```
@@ -96,9 +106,11 @@ Once your branch is pushed:
 - Open a **pull request**
 - Use a **short title** like: `docs: fix broken release badge in README`
 - In the PR description, include:
-  ```
+
+  ```text
   Closes #<issue-number>
   ```
+
 - Assign:
   - Yourself as **Assignee**
   - The correct **Labels**
@@ -112,6 +124,7 @@ assigning the milestone or project — those should live on the issue.  If not, 
 ## 6. Review the Pull Request
 
 Even as a solo dev, use the PR as a checkpoint:
+
 - Review the diff on GitHub
 - Ensure test coverage (if applicable)
 - Optional: Remove `Co-authored-by:` lines if you're the sole author
@@ -149,10 +162,13 @@ Use GitHub's `noreply` address for privacy:
 1. Go to [GitHub → Settings → Emails](https://github.com/settings/emails)
 2. Enable `Keep my email addresses private`
 3. Set it globally in Git:
+
    ```sh
    git config --global user.email "YOUR_USERNAME@users.noreply.github.com"
    ```
+
 4. (Optional) Remove local override:
+
    ```sh
    git config --unset user.email
    ```
@@ -160,12 +176,15 @@ Use GitHub's `noreply` address for privacy:
 ---
 
 ## 11. Versioning and Releases
+
 After all milestone issues are merged, create an issue for the release
 using the template below.  Then follow the steps in the template.
 
 ## Release Issue Template
+
 Use the following template to generate an issue for release `vX.X.X`
-# Release vX.X.X
+
+## Release vX.X.X
 
 This issue tracks the version bump, tagging, and release publishing steps for `vX.X.X`.
 
@@ -176,24 +195,31 @@ This issue tracks the version bump, tagging, and release publishing steps for `v
 - [ ] Update `version` in `pyproject.toml` to `X.X.X`
 - [ ] Add release notes to RELEASES.md
 - [ ] Commit with:
+
   ```sh
   git commit -m "chore: bump version to X.X.X"
   ```
+
 - [ ] Push and open PR titled:
-  ```
+
+  ```text
   chore: release vX.X.X
   ```
+
 - [ ] Squash and merge PR
 - [ ] Tag the release:
+
   ```sh
   git tag vX.X.X
   git push origin vX.X.X
   ```
+
 - [ ] Create GitHub Release with:
   - Title: `vX.X.X`
   - Description: Closed issues, changelog, or summary
 
 ## Notes
+
 - Link this issue to the release PR using `Closes #XXX` or mention it manually.
 - Delete the release branch after merging.
 
@@ -214,7 +240,8 @@ When beginning work on a new milestone (e.g., `v1.1.0`), update the version in `
 version = "1.1.0.dev0"
 ```
 
-#### Steps:
+#### Steps
+
 1. Create a GitHub Issue
    - Title: `chore: bump version to 1.1.0.dev0`
    - Label: `chore`
@@ -225,14 +252,17 @@ version = "1.1.0.dev0"
 3. Update `pyproject.toml` `version` accordingly
 
 4. Commit with:
+
    ```sh
    git commit -m "chore: bump version to 1.1.0.dev0"
    ```
 
 5. Open a PR with title:
-   ```
+
+   ```text
    chore: bump version to 1.1.0.dev0
    ```
+
    Include `Closes #<issue-number>` in the PR body
 
 6. Squash and merge
@@ -244,7 +274,8 @@ version = "1.1.0.dev0"
 Version numbers are stored only in the `pyproject.toml` file under the `[project]` section.
 
 Format:
-```
+
+```text
 MAJOR.MINOR.PATCH.devN
 ```
 
@@ -259,6 +290,7 @@ MAJOR.MINOR.PATCH.devN
   - After release, immediately bump the version to the next cycle's `.dev0`.
 
 This policy ensures:
+
 - Clear traceability of development progress between releases.
 - PEP 440–compliant version strings for tooling compatibility.
 - No extra commits purely for development version bumps.

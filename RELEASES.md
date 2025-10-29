@@ -4,8 +4,36 @@
 
 ### Added
 
-- CLI/video: optional GIF export via `--gif`, with `--gif-include-intro` and
-  `--gif-include-outro` flags to control segment inclusion.
+- _None yet._
+
+## v1.2.0 - 2025-10-29
+
+**Milestone:** v1.2 Video Polish & Runner Revamp
+
+This release pairs a modernized optimization runner with a polished output pipeline,
+delivering richer comparison assets and production-ready video exports.
+
+### Highlights
+
+- Video pipeline now supports post-process encoding, metadata tags, intro cards, GIFs,
+  and comparison frames for share-ready outputs (#26, #16, #9, #5, #13)
+- Introduced `StyleTransferRunner`, shared CLI override helpers, and modularized runtime
+  utilities for cleaner orchestration (#56, #57, #55)
+- Published reusable compare-grid API and console script backed by decomposed gallery
+  modules (#58, #54)
+
+### Changelog
+
+- Video: Added `--video-mode postprocess`, MP4 metadata tagging, optional intro title card,
+  GIF output flags, and a finale comparison frame (#26, #16, #5, #9, #13)
+- Images: Generated a final content/style/result composite image and exposed compare-grid
+  helpers with a console script (#10, #58)
+- CLI: Moved override logic into the config layer for reuse across entry points (#57)
+- Core: Replaced low-level loop helpers with `StyleTransferRunner` that encapsulates
+  optimization state (#56)
+- Refactor: Split `utils.py` and `image_grid.py` into focused runtime and visualization
+  modules (#55, #54)
+- Testing: Added shared pytest fixtures for configs and output directories (#59)
 
 ## v1.1.0 — 2025-08-27
 
