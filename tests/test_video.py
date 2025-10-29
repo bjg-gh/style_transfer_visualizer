@@ -200,6 +200,42 @@ def test_setup_video_writer_rejects_unknown_mode(tmp_path: Path) -> None:
         stv_video.setup_video_writer(cfg, tmp_path, "video.mp4")
 
 
+def test_setup_gif_collector_returns_none_when_disabled(tmp_path: Path) -> None:
+    """GIF collector should not be created when disabled in config."""
+    cfg = VideoConfig(
+        fps=12,
+        quality=7,
+        save_every=1,
+        create_video=True,
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
+        create_gif=False,
+    )
+    collector = stv_video.setup_gif_collector(cfg, tmp_path, "anim.gif")
+    assert collector is None
+
+
+def test_setup_gif_collector_creates_collector(tmp_path: Path) -> None:
+    """When enabled, the GIF collector should be returned."""
+    cfg = VideoConfig(
+        fps=8,
+        quality=6,
+        save_every=2,
+        create_video=False,
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
+        create_gif=True,
+    )
+    collector = stv_video.setup_gif_collector(cfg, tmp_path, "anim.gif")
+    try:
+        assert isinstance(collector, stv_video.GifFrameCollector)
+    finally:
+        if collector is not None:
+            collector.close()
+
+
 def test_postprocess_writer_collects_and_encodes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -546,8 +582,7 @@ def test_prepare_intro_segment_returns_none_when_intro_disabled(
     result = stv_video.prepare_intro_segment(
         cfg,
         writer,
-        content_image,
-        style_image,
+        (content_image, style_image),
     )
     assert result is None
     assert writer.frames == []
@@ -572,8 +607,7 @@ def test_prepare_intro_segment_generates_frames(
     info = stv_video.prepare_intro_segment(
         cfg,
         writer,
-        content_image,
-        style_image,
+        (content_image, style_image),
     )
     assert info is not None
     intro_frame, crossfade_frames = info
@@ -590,6 +624,103 @@ def test_prepare_intro_segment_generates_frames(
     expected_hold = max(0, round(cfg.fps * cfg.intro_duration_seconds))
     assert len(writer.frames) == expected_fade + expected_hold
     assert all(frame.shape == intro_frame.shape for frame in writer.frames)
+
+
+def test_prepare_intro_segment_appends_hold_frames_to_all_sinks(
+    content_image: Path,
+    style_image: Path,
+) -> None:
+    """Hold frames should be emitted to both writer and GIF sink when requested."""
+    cfg = VideoConfig(
+        fps=2,
+        quality=5,
+        save_every=1,
+        create_video=True,
+        create_gif=True,
+        intro_enabled=True,
+        intro_duration_seconds=0.5,  # ensure at least one hold frame
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
+    )
+    video_writer = DummyWriter()
+    gif_writer = DummyWriter()
+    gif_options = stv_video.GifSegmentOptions(
+        sink=gif_writer,
+        include_intro=True,
+    )
+
+    info = stv_video.prepare_intro_segment(
+        cfg,
+        video_writer,
+        (content_image, style_image),
+        gif_options=gif_options,
+    )
+
+    assert info is not None
+    assert video_writer.frames  # hold frames captured
+    assert gif_writer.frames  # gif sink also received frames
+
+
+def test_prepare_intro_segment_emits_gif_frames_only(
+    content_image: Path,
+    style_image: Path,
+) -> None:
+    """Intro segment should still render when only GIF output is enabled."""
+    cfg = VideoConfig(
+        fps=5,
+        quality=5,
+        save_every=1,
+        create_video=False,
+        create_gif=True,
+        intro_enabled=True,
+        intro_duration_seconds=0.0,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
+    )
+    gif_writer = DummyWriter()
+    gif_options = stv_video.GifSegmentOptions(
+        sink=gif_writer,
+        include_intro=True,
+    )
+    info = stv_video.prepare_intro_segment(
+        cfg,
+        None,
+        (content_image, style_image),
+        gif_options=gif_options,
+    )
+    assert info is not None
+    assert gif_writer.frames, "GIF writer should capture intro frames"
+
+
+def test_prepare_intro_segment_skips_gif_when_not_requested(
+    content_image: Path,
+    style_image: Path,
+) -> None:
+    """GIF sink should remain empty when intro inclusion is disabled."""
+    cfg = VideoConfig(
+        fps=5,
+        quality=5,
+        save_every=1,
+        create_video=False,
+        create_gif=True,
+        intro_enabled=True,
+        intro_duration_seconds=0.0,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
+    )
+    gif_writer = DummyWriter()
+    gif_options = stv_video.GifSegmentOptions(
+        sink=gif_writer,
+        include_intro=False,
+    )
+    result = stv_video.prepare_intro_segment(
+        cfg,
+        None,
+        (content_image, style_image),
+        gif_options=gif_options,
+    )
+    assert result is None
+    assert gif_writer.frames == []
 
 
 def test_append_crossfade_handles_zero_frame_count() -> None:
@@ -639,6 +770,74 @@ def test_resolve_writer_dimensions_ignores_invalid_writer_size() -> None:
     np.testing.assert_array_equal(resized, last_frame)
 
 
+def test_append_final_comparison_frame_emits_gif_frames(
+    content_image: Path,
+    style_image: Path,
+) -> None:
+    """Final comparison frame should be emitted to GIF sink when enabled."""
+    cfg = VideoConfig(
+        fps=6,
+        quality=5,
+        save_every=1,
+        create_video=False,
+        create_gif=True,
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=0.0,
+        final_frame_compare=True,
+        mode="realtime",
+    )
+    gif_writer = DummyWriter()
+    last_frame = np.zeros((64, 64, 3), dtype=np.uint8)
+    gif_options = stv_video.GifSegmentOptions(
+        sink=gif_writer,
+        include_outro=True,
+    )
+
+    stv_video.append_final_comparison_frame(
+        cfg,
+        None,
+        (content_image, style_image),
+        last_frame,
+        gif_options=gif_options,
+    )
+
+    assert gif_writer.frames, "GIF writer should capture outro frames"
+
+
+def test_append_final_comparison_frame_skips_gif_when_not_requested(
+    content_image: Path,
+    style_image: Path,
+) -> None:
+    """GIF sink should remain untouched when outro inclusion is disabled."""
+    cfg = VideoConfig(
+        fps=6,
+        quality=5,
+        save_every=1,
+        create_video=False,
+        create_gif=True,
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=0.0,
+        final_frame_compare=True,
+        mode="realtime",
+    )
+    gif_writer = DummyWriter()
+    last_frame = np.zeros((64, 64, 3), dtype=np.uint8)
+    gif_options = stv_video.GifSegmentOptions(
+        sink=gif_writer,
+        include_outro=False,
+    )
+
+    stv_video.append_final_comparison_frame(
+        cfg,
+        None,
+        (content_image, style_image),
+        last_frame,
+        gif_options=gif_options,
+    )
+
+    assert gif_writer.frames == []
+
+
 def test_append_final_comparison_frame_skips_when_disabled(
     content_image: Path,
     style_image: Path,
@@ -660,12 +859,38 @@ def test_append_final_comparison_frame_skips_when_disabled(
     stv_video.append_final_comparison_frame(
         cfg,
         writer,
-        content_image,
-        style_image,
+        (content_image, style_image),
         last_frame,
     )
 
     assert writer.frames == []
+
+
+def test_append_final_comparison_frame_returns_when_no_targets(
+    content_image: Path,
+    style_image: Path,
+) -> None:
+    """Function should return early when neither writer nor GIF sink is active."""
+    cfg = VideoConfig(
+        fps=5,
+        quality=5,
+        save_every=1,
+        create_video=False,
+        create_gif=False,
+        final_frame_compare=True,
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
+    )
+    last_frame = np.zeros((10, 10, 3), dtype=np.uint8)
+
+    # Should not raise when both sinks are inactive.
+    stv_video.append_final_comparison_frame(
+        cfg,
+        None,
+        (content_image, style_image),
+        last_frame,
+    )
 
 
 def test_append_final_comparison_frame_appends_when_enabled(
@@ -699,8 +924,7 @@ def test_append_final_comparison_frame_appends_when_enabled(
     stv_video.append_final_comparison_frame(
         cfg,
         writer,
-        content_image,
-        style_image,
+        (content_image, style_image),
         last_frame,
     )
 
@@ -760,7 +984,22 @@ def test_append_final_comparison_frame_validates_shape(
         stv_video.append_final_comparison_frame(
             cfg,
             writer,
-            content_image,
-            style_image,
+            (content_image, style_image),
             last_frame,
         )
+
+
+
+def test_gif_frame_collector_writes_gif(tmp_path: Path) -> None:
+    """Collector should emit a GIF file and clean temp storage."""
+    output_path = tmp_path / "anim.gif"
+    collector = stv_video.GifFrameCollector(output_path, fps=5)
+    frame = np.zeros((4, 4, 3), dtype=np.uint8)
+    collector.append_data(frame)
+    collector.append_data(frame)
+    collector.close()
+    assert output_path.exists()
+    assert not collector._temp_dir.exists()  # noqa: SLF001
+    with pytest.raises(RuntimeError, match="Cannot append frame"):
+        collector.append_data(frame)
+    collector.close()

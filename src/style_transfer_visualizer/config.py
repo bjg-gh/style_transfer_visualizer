@@ -16,10 +16,13 @@ from pydantic import BaseModel, Field
 from style_transfer_visualizer.config_defaults import (
     DEFAULT_CONTENT_LAYERS,
     DEFAULT_CONTENT_WEIGHT,
+    DEFAULT_CREATE_GIF,
     DEFAULT_CREATE_VIDEO,
     DEFAULT_DEVICE,
     DEFAULT_FINAL_ONLY,
     DEFAULT_FPS,
+    DEFAULT_GIF_INCLUDE_INTRO,
+    DEFAULT_GIF_INCLUDE_OUTRO,
     DEFAULT_INIT_METHOD,
     DEFAULT_LEARNING_RATE,
     DEFAULT_LOG_EVERY,
@@ -87,6 +90,9 @@ class VideoConfig(BaseModel):
         ge=0.0,
     )
     mode: VideoMode = Field(DEFAULT_VIDEO_MODE)
+    create_gif: bool = DEFAULT_CREATE_GIF
+    gif_include_intro: bool = DEFAULT_GIF_INCLUDE_INTRO
+    gif_include_outro: bool = DEFAULT_GIF_INCLUDE_OUTRO
     mode_override: bool = Field(
         default=False,
         exclude=True,
@@ -246,6 +252,9 @@ def _apply_video_overrides(
         "quality",
         "metadata_title",
         "metadata_artist",
+        "create_gif",
+        "gif_include_intro",
+        "gif_include_outro",
     )
     for name in direct_attrs:
         if name in args:

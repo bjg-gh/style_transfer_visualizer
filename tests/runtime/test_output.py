@@ -106,6 +106,50 @@ def test_save_outputs_happy_path(
     assert "Final stylized image saved to" in caplog.text
 
 
+def test_save_outputs_logs_gif_when_present(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
+    monkeypatch.setattr(
+        "style_transfer_visualizer.image_io.prepare_image_for_output",
+        lambda tensor, normalize: tensor,
+    )
+    monkeypatch.setattr(
+        "torchvision.utils.save_image",
+        lambda tensor, target_path: target_path,
+    )
+    monkeypatch.setattr(
+        "style_transfer_visualizer.visualization.metrics.plot_loss_curves",
+        lambda *_a, **_k: None,
+    )
+
+    gif_path = tmp_path / "anim.gif"
+    gif_path.write_bytes(b"GIF89a")
+
+    opts = SaveOptions(
+        content_name="content",
+        style_name="style",
+        video_name=None,
+        gif_name="anim.gif",
+        normalize=False,
+        video_created=False,
+        gif_created=True,
+        plot_losses=False,
+    )
+
+    runtime_output.save_outputs(
+        torch.rand(1, 3, 2, 2),
+        {},
+        tmp_path,
+        elapsed=0.2,
+        opts=opts,
+    )
+
+    assert "GIF saved to" in caplog.text
+
+
 def test_save_outputs_fallback_directory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -207,3 +251,50 @@ def test_save_outputs_creates_missing_directory(
 
     assert output_dir.exists()
     assert created["path"] == output_dir / "stylized_content_x_style.png"
+
+
+def test_save_outputs_skips_missing_gif_log(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """No GIF log entry should be emitted when the GIF file is absent."""
+    caplog.set_level(logging.INFO)
+
+    monkeypatch.setattr(
+        "style_transfer_visualizer.image_io.prepare_image_for_output",
+        lambda tensor, normalize: tensor,
+    )
+    monkeypatch.setattr(
+        "torchvision.utils.save_image",
+        lambda tensor, target_path: target_path,
+    )
+    monkeypatch.setattr(
+        "style_transfer_visualizer.visualization.metrics.plot_loss_curves",
+        lambda *_a, **_k: None,
+    )
+
+    opts = SaveOptions(
+        content_name="content",
+        style_name="style",
+        gif_name="missing.gif",
+        normalize=False,
+        video_created=False,
+        gif_created=True,
+        plot_losses=False,
+    )
+
+    # Ensure the GIF file truly does not exist.
+    gif_path = tmp_path / "missing.gif"
+    if gif_path.exists():
+        gif_path.unlink()
+
+    runtime_output.save_outputs(
+        torch.rand(1, 3, 2, 2),
+        {},
+        tmp_path,
+        elapsed=0.1,
+        opts=opts,
+    )
+
+    assert not any("GIF saved to" in message for message in caplog.messages)

@@ -31,6 +31,8 @@ class SaveOptions:
     content_name: str
     style_name: str
     video_name: str | None = None
+    gif_name: str | None = None
     normalize: bool = True
     video_created: bool = True
+    gif_created: bool = False
     plot_losses: bool = True

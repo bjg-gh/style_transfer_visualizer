@@ -663,15 +663,16 @@ def test_style_transfer_appends_final_comparison_frame(
 
     captured: dict[str, object] = {}
 
-    def fake_append(
+    def fake_append(  # type: ignore[override]
         cfg: VideoConfig,
         writer: StubWriter,
-        content_path: str | Path,
-        style_path: str | Path,
+        paths: tuple[str | Path, str | Path],
         last_frame: np.ndarray,
+        **_kwargs: object,
     ) -> None:
         captured["cfg"] = cfg
         captured["writer"] = writer
+        content_path, style_path = paths
         captured["content"] = Path(content_path)
         captured["style"] = Path(style_path)
         captured["shape"] = last_frame.shape
@@ -702,6 +703,196 @@ def test_style_transfer_appends_final_comparison_frame(
     assert captured["style"] == Path(video_assets.style_image)
     assert captured["shape"] == (64, 64, 3)
     assert writer_instance.closed is True
+
+
+def test_style_transfer_skips_final_frame_when_prepare_returns_none(
+    video_assets: VideoTestAssets,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Final comparison frame should be skipped when preparation returns None."""
+    output_dir = video_assets.new_output("final_compare_none")
+    dummy_tensor = torch.rand(1, 3, 32, 32)
+
+    monkeypatch.setattr(stv_runtime, "validate_input_paths", lambda *_a, **_k: None)
+    monkeypatch.setattr(stv_runtime, "validate_parameters", lambda *_a, **_k: None)
+    monkeypatch.setattr(stv_runtime, "setup_random_seed", lambda *_a, **_k: None)
+    monkeypatch.setattr(stv_runtime, "setup_device", lambda *_a, **_k: torch.device("cpu"))
+    monkeypatch.setattr(
+        stv_runtime,
+        "setup_output_directory",
+        lambda _p: Path(output_dir),
+    )
+    monkeypatch.setattr(stv_runtime, "save_outputs", lambda *_a, **_k: None)
+    monkeypatch.setattr(stv_image_io, "load_image_to_tensor", lambda *_a, **_k: dummy_tensor)
+    monkeypatch.setattr(
+        stv_core_model,
+        "prepare_model_and_input",
+        lambda *_a, **_k: ("model", dummy_tensor.clone(), "optimizer"),
+    )
+
+    patch_runner(
+        monkeypatch,
+        run_result=(dummy_tensor.clone(), {"loss": []}, 0.0),
+    )
+
+    class StubWriter:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def append_data(self, _frame: np.ndarray) -> None:
+            raise AssertionError("append_data should not be called")
+
+        def close(self) -> None:
+            self.closed = True
+
+    writer_instance = StubWriter()
+    monkeypatch.setattr(
+        stv_video,
+        "setup_video_writer",
+        lambda *_a, **_k: writer_instance,
+    )
+    monkeypatch.setattr(
+        stv_video,
+        "prepare_intro_segment",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        stv_image_io,
+        "prepare_image_for_output",
+        lambda *_a, **_k: None,
+    )
+
+    called = {"flag": False}
+
+    def fake_append(*_args: object, **_kwargs: object) -> None:
+        called["flag"] = True
+
+    monkeypatch.setattr(
+        stv_video,
+        "append_final_comparison_frame",
+        fake_append,
+    )
+
+    paths = video_assets.inputs()
+    cfg = video_assets.config(
+        optimization={"steps": 1},
+        video={
+            "create_video": True,
+            "save_every": 1,
+            "final_frame_compare": True,
+        },
+        output={"output": output_dir},
+    )
+
+    result = stv_main.style_transfer(paths, cfg)
+
+    assert isinstance(result, torch.Tensor)
+    assert called["flag"] is False
+    assert writer_instance.closed is True
+
+
+def test_style_transfer_passes_gif_options_when_outro_requested(
+    video_assets: VideoTestAssets,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """When GIF outro is requested, the GIF options should be supplied."""
+    output_dir = video_assets.new_output("gif_outro_request")
+    dummy_tensor = torch.rand(1, 3, 48, 48)
+
+    monkeypatch.setattr(stv_runtime, "validate_input_paths", lambda *_a, **_k: None)
+    monkeypatch.setattr(stv_runtime, "validate_parameters", lambda *_a, **_k: None)
+    monkeypatch.setattr(stv_runtime, "setup_random_seed", lambda *_a, **_k: None)
+    monkeypatch.setattr(stv_runtime, "setup_device", lambda *_a, **_k: torch.device("cpu"))
+    monkeypatch.setattr(
+        stv_runtime,
+        "setup_output_directory",
+        lambda _p: Path(output_dir),
+    )
+    monkeypatch.setattr(stv_runtime, "save_outputs", lambda *_a, **_k: None)
+    monkeypatch.setattr(stv_image_io, "load_image_to_tensor", lambda *_a, **_k: dummy_tensor)
+    monkeypatch.setattr(
+        stv_core_model,
+        "prepare_model_and_input",
+        lambda *_a, **_k: ("model", dummy_tensor.clone(), "optimizer"),
+    )
+    patch_runner(
+        monkeypatch,
+        run_result=(dummy_tensor.clone(), {"loss": []}, 0.0),
+    )
+
+    monkeypatch.setattr(
+        stv_video,
+        "setup_video_writer",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        stv_video,
+        "prepare_intro_segment",
+        lambda *_a, **_k: None,
+    )
+
+    class StubCollector:
+        def __init__(self) -> None:
+            self.frames: list[np.ndarray] = []
+            self._size: tuple[int, int] | None = None
+            self.closed = False
+
+        def append_data(self, frame: np.ndarray) -> None:
+            rgb = np.asarray(frame, dtype=np.uint8)
+            self._size = (rgb.shape[1], rgb.shape[0])
+            self.frames.append(rgb)
+
+        def close(self) -> None:
+            self.closed = True
+
+    collector = StubCollector()
+    monkeypatch.setattr(
+        stv_video,
+        "setup_gif_collector",
+        lambda *_a, **_k: collector,
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_append(  # type: ignore[override]
+        cfg: VideoConfig,
+        writer: object,
+        paths: tuple[Path, Path],
+        last_frame: np.ndarray,
+        **kwargs: object,
+    ) -> None:
+        captured["cfg"] = cfg
+        captured["writer"] = writer
+        captured["paths"] = paths
+        captured["frame"] = last_frame
+        captured["gif_options"] = kwargs.get("gif_options")
+
+    monkeypatch.setattr(
+        stv_video,
+        "append_final_comparison_frame",
+        fake_append,
+    )
+
+    paths = video_assets.inputs()
+    cfg = video_assets.config(
+        optimization={"steps": 1},
+        video={
+            "create_video": False,
+            "create_gif": True,
+            "gif_include_outro": True,
+            "save_every": 1,
+        },
+        output={"output": output_dir},
+    )
+
+    result = stv_main.style_transfer(paths, cfg)
+
+    assert isinstance(result, torch.Tensor)
+    gif_opts = captured.get("gif_options")
+    assert isinstance(gif_opts, stv_video.GifSegmentOptions)
+    assert gif_opts.sink is collector
+    assert isinstance(captured["frame"], np.ndarray)
+    assert collector.closed is True
 
 
 def test_final_only_disables_video(
@@ -778,6 +969,9 @@ def apply_mock(monkeypatch: MonkeyPatch) -> None:
         if save_opts.video_created and save_opts.video_name:
             video_path = output_dir / save_opts.video_name
             video_path.write_text("mock video")  # Avoid bytes warning
+        if save_opts.gif_created and save_opts.gif_name:
+            gif_path = output_dir / save_opts.gif_name
+            gif_path.write_text("mock gif")
 
     monkeypatch.setattr(stv_runtime, "save_outputs", mock_save)
 def patch_runner(

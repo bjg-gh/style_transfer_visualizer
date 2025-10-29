@@ -81,6 +81,7 @@ class OptimizationRunner:
         progress_bar: ProgressReporter | None = None,
         callbacks: OptimizationCallbacks | None = None,
         video_writer: stv_video.VideoFrameSink | None = None,
+        gif_collector: stv_video.VideoFrameSink | None = None,
         intro_last_frame: np.ndarray | None = None,
         intro_crossfade_frames: int = 0,
     ) -> None:
@@ -104,6 +105,7 @@ class OptimizationRunner:
         self.callbacks = callbacks or OptimizationCallbacks()
 
         self.video_writer = video_writer
+        self.gif_collector = gif_collector
         self.intro_last_frame = intro_last_frame
         self.intro_crossfade_frames = intro_crossfade_frames
         self.intro_transition_done = intro_last_frame is None
@@ -326,11 +328,12 @@ class OptimizationRunner:
         """Write a timelapse frame when configured to do so."""
         save_every = self.config.video.save_every
         video_writer = self.video_writer
+        gif_collector = self.gif_collector
 
         if (
             not save_every
             or step_idx % save_every != 0
-            or video_writer is None
+            or (video_writer is None and gif_collector is None)
         ):
             return
 
@@ -354,16 +357,33 @@ class OptimizationRunner:
             self.intro_last_frame is not None
             and not self.intro_transition_done
         ):
-            stv_video.append_crossfade(
-                video_writer,
-                self.intro_last_frame,
-                img_np,
-                self.intro_crossfade_frames,
-            )
+            if (
+                video_writer is not None
+                and self.config.video.intro_enabled
+            ):
+                stv_video.append_crossfade(
+                    video_writer,
+                    self.intro_last_frame,
+                    img_np,
+                    self.intro_crossfade_frames,
+                )
+            if (
+                gif_collector is not None
+                and self.config.video.gif_include_intro
+            ):
+                stv_video.append_crossfade(
+                    gif_collector,
+                    self.intro_last_frame,
+                    img_np,
+                    self.intro_crossfade_frames,
+                )
             self.intro_transition_done = True
             self.intro_last_frame = None
 
-        video_writer.append_data(img_np)
+        if video_writer is not None:
+            video_writer.append_data(img_np)
+        if gif_collector is not None:
+            gif_collector.append_data(img_np)
         self.progress_bar.set_postfix({
             "style": f"{style_score.item():.4f}",
             "content": f"{content_score.item():.4f}",

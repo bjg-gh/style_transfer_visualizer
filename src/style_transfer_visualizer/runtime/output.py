@@ -102,6 +102,10 @@ def save_outputs(
 
     if opts.video_created and opts.video_name:
         logger.info("Video saved to: %s", output_dir / opts.video_name)
+    if opts.gif_created and opts.gif_name:
+        gif_path = output_dir / opts.gif_name
+        if gif_path.exists():
+            logger.info("GIF saved to: %s", gif_path)
 
     if opts.plot_losses:
         from style_transfer_visualizer.visualization.metrics import (  # noqa: PLC0415

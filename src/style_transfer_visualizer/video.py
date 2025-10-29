@@ -5,9 +5,10 @@ from __future__ import annotations
 import shutil
 import tempfile
 from contextlib import ExitStack
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import imageio
 import numpy as np
@@ -125,6 +126,15 @@ class VideoFrameSink(Protocol):
         """Flush and release any resources held by the sink."""
 
 
+@dataclass(slots=True)
+class GifSegmentOptions:
+    """Options controlling optional GIF segment emission."""
+
+    sink: VideoFrameSink | None = None
+    include_intro: bool = False
+    include_outro: bool = False
+
+
 def _blend_frames(
     frame_a: np.ndarray,
     frame_b: np.ndarray,
@@ -191,11 +201,32 @@ def _build_intro_frame(content_path: Path, style_path: Path) -> np.ndarray:
 def prepare_intro_segment(
     config: VideoConfig,
     writer: VideoFrameSink | None,
-    content_path: Path,
-    style_path: Path,
+    paths: tuple[Path, Path],
+    gif_options: GifSegmentOptions | None = None,
 ) -> tuple[np.ndarray, int] | None:
-    """Render intro sequence, return final intro frame and crossfade length."""
-    if writer is None or not config.create_video or not config.intro_enabled:
+    """
+    Render intro sequence, returning the last intro frame and crossfade length.
+
+    Frames are emitted to the provided writer and, optionally, to a GIF sink
+    when the corresponding option is enabled. Returns ``None`` when no sink
+    requires the intro sequence.
+    """
+    content_path, style_path = paths
+    gif_sink = gif_options.sink if gif_options else None
+    include_gif_intro = bool(gif_options and gif_options.include_intro)
+
+    use_writer = (
+        writer is not None
+        and config.create_video
+        and config.intro_enabled
+    )
+    use_gif = (
+        gif_sink is not None
+        and include_gif_intro
+        and config.intro_enabled
+    )
+
+    if not use_writer and not use_gif:
         return None
 
     intro_frame = _build_intro_frame(content_path, style_path)
@@ -205,9 +236,21 @@ def prepare_intro_segment(
     hold_frames = max(0, hold_frames_raw)
 
     black = np.zeros_like(intro_frame)
-    _append_fade_transition(writer, black, intro_frame, fade_frames)
+    writer_sink = writer if use_writer else None
+    gif_sink_live = gif_sink if use_gif else None
+
+    if writer_sink is not None:
+        _append_fade_transition(writer_sink, black, intro_frame, fade_frames)
+    if gif_sink_live is not None:
+        _append_fade_transition(gif_sink_live, black, intro_frame, fade_frames)
+
     for _ in range(hold_frames):
-        writer.append_data(intro_frame)
+        if writer_sink is not None:
+            writer_sink.append_data(intro_frame)
+        else:  # pragma: no cover - writer path exercised in tests
+            pass
+        if gif_sink_live is not None:
+            gif_sink_live.append_data(intro_frame)
 
     crossfade_raw = round(config.fps * INTRO_CROSSFADE_SECONDS)
     crossfade_frames = max(1, min(crossfade_raw, INTRO_MAX_CROSSFADE_FRAMES))
@@ -299,9 +342,9 @@ def _build_outro_frame(
 def append_final_comparison_frame(
     config: VideoConfig,
     writer: VideoFrameSink | None,
-    content_path: Path,
-    style_path: Path,
+    paths: tuple[Path, Path],
     last_frame: np.ndarray,
+    gif_options: GifSegmentOptions | None = None,
 ) -> None:
     """
     Append a final comparison frame showing content, style, and result.
@@ -311,46 +354,101 @@ def append_final_comparison_frame(
     timelapse frame followed by a configurable hold duration. No-op when
     the feature is disabled.
     """
-    if (
-        writer is None
-        or not config.create_video
-        or not config.final_frame_compare
-    ):
+    gif_sink = gif_options.sink if gif_options else None
+    include_gif_outro = bool(gif_options and gif_options.include_outro)
+
+    use_writer = (
+        writer is not None
+        and config.create_video
+        and config.final_frame_compare
+    )
+    use_gif = (
+        gif_sink is not None
+        and include_gif_outro
+        and config.final_frame_compare
+    )
+
+    if not use_writer and not use_gif:
         return
-    last_rgb, target_width, target_height = _resolve_writer_dimensions(
-        writer,
+
+    validated_last = _ensure_rgb_uint8(
         last_frame,
+        message="Last timelapse frame must be an RGB array",
     )
-    result_image = Image.fromarray(np.asarray(last_frame, dtype=np.uint8))
+    result_image = Image.fromarray(
+        np.asarray(validated_last, dtype=np.uint8),
+    )
     frame_params = FrameParams(frame_tone="gold", label="on")
-    frame_np = _build_outro_frame(
-        (content_path, style_path),
-        result_image,
-        frame_params,
-        target_width=target_width,
-        target_height=target_height,
-    )
+
+    targets: list[tuple[VideoFrameSink, np.ndarray, np.ndarray]] = []
+
+    if writer is not None and use_writer:
+        targets.append(
+            _prepare_outro_target(
+                sink=writer,
+                last_frame=validated_last,
+                paths=paths,
+                result_image=result_image,
+                frame_params=frame_params,
+            ),
+        )
+    if gif_sink is not None and use_gif:
+        targets.append(
+            _prepare_outro_target(
+                sink=gif_sink,
+                last_frame=validated_last,
+                paths=paths,
+                result_image=result_image,
+                frame_params=frame_params,
+            ),
+        )
 
     timelapse_hold_raw = round(config.fps * FINAL_TIMELAPSE_HOLD_SECONDS)
     timelapse_hold_frames = max(FINAL_TIMELAPSE_MIN_FRAMES, timelapse_hold_raw)
     for _ in range(timelapse_hold_frames):
-        writer.append_data(last_rgb)
+        for sink, last_rgb, _ in targets:
+            sink.append_data(last_rgb)
 
     crossfade_raw = round(config.fps * OUTRO_CROSSFADE_SECONDS)
     crossfade_frames = max(1, min(crossfade_raw, OUTRO_MAX_CROSSFADE_FRAMES))
-    append_crossfade(
-        writer,
-        last_rgb,
-        frame_np,
-        crossfade_frames,
-        max_frames=OUTRO_MAX_CROSSFADE_FRAMES,
-    )
+    for sink, last_rgb, frame_np in targets:
+        append_crossfade(
+            sink,
+            last_rgb,
+            frame_np,
+            crossfade_frames,
+            max_frames=OUTRO_MAX_CROSSFADE_FRAMES,
+        )
 
     outro_seconds = max(0.0, config.outro_duration_seconds)
     hold_frames_raw = round(config.fps * outro_seconds)
     hold_frames = max(FINAL_COMPARISON_MIN_FRAMES, hold_frames_raw)
     for _ in range(hold_frames):
-        writer.append_data(frame_np)
+        for sink, _, frame_np in targets:
+            sink.append_data(frame_np)
+
+
+def _prepare_outro_target(
+    *,
+    sink: VideoFrameSink,
+    last_frame: np.ndarray,
+    paths: tuple[Path, Path],
+    result_image: Image.Image,
+    frame_params: FrameParams,
+) -> tuple[VideoFrameSink, np.ndarray, np.ndarray]:
+    """Return sink paired with aligned timelapse and outro frames."""
+    last_rgb, target_width, target_height = _resolve_writer_dimensions(
+        sink,
+        last_frame,
+    )
+    frame_np = _build_outro_frame(
+        paths,
+        result_image,
+        frame_params,
+        target_width=target_width,
+        target_height=target_height,
+    )
+    return sink, last_rgb, frame_np
 
 
 class PostprocessVideoWriter:
@@ -408,6 +506,66 @@ class PostprocessVideoWriter:
             shutil.rmtree(self._temp_dir, ignore_errors=True)
 
 
+class GifFrameCollector:
+    """Collect frames destined for GIF export and encode them on close."""
+
+    def __init__(self, output_path: Path, fps: int) -> None:
+        self._output_path = output_path
+        self._fps = max(1, fps)
+        self._temp_dir = Path(
+            tempfile.mkdtemp(
+                prefix="stv_gif_",
+                dir=output_path.parent,
+            ),
+        )
+        self._frames: list[Path] = []
+        self._closed = False
+        self._size: tuple[int, int] | None = None
+
+    def append_data(self, frame: np.ndarray) -> None:
+        """Persist a frame for inclusion in the final GIF."""
+        if self._closed:
+            msg = "Cannot append frame after GIF collector has been closed."
+            raise RuntimeError(msg)
+
+        rgb = _ensure_rgb_uint8(frame)
+        height, width = rgb.shape[:2]
+        self._size = (width, height)
+
+        frame_path = self._temp_dir / (
+            f"gif_{len(self._frames):08d}{_PNG_SUFFIX}"
+        )
+        Image.fromarray(rgb, mode="RGB").save(frame_path, format="PNG")
+        self._frames.append(frame_path)
+
+    def close(self) -> None:
+        """Encode collected frames into a GIF and delete temporary storage."""
+        if self._closed:
+            return
+
+        self._closed = True
+        try:
+            if not self._frames:
+                return
+
+            self._output_path.parent.mkdir(parents=True, exist_ok=True)
+            duration = 1.0 / float(self._fps)
+            writer_ctx = imageio.get_writer(
+                self._output_path.as_posix(),
+                mode="I",
+                duration=duration,
+                loop=0,
+            )
+            with cast("Any", writer_ctx) as writer:
+                for frame_path in self._frames:
+                    with Image.open(frame_path) as img:
+                        writer.append_data(
+                            np.asarray(img.convert("RGB"), dtype=np.uint8),
+                        )
+        finally:
+            shutil.rmtree(self._temp_dir, ignore_errors=True)
+
+
 def _open_imageio_writer(
     config: VideoConfig,
     output_path: Path,
@@ -455,6 +613,19 @@ def setup_video_writer(
         msg = f"Unsupported video mode: {config.mode}"
         raise ValueError(msg)
     return _open_imageio_writer(config, output_path)
+
+
+def setup_gif_collector(
+    config: VideoConfig,
+    output_dir: Path,
+    gif_name: str,
+) -> VideoFrameSink | None:
+    """Return a GIF frame collector when GIF export is enabled."""
+    if not config.create_gif:
+        return None
+
+    output_path = (output_dir / gif_name).resolve()
+    return GifFrameCollector(output_path, config.fps)
 
 
 def _auto_postprocess_reason(
