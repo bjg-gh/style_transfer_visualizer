@@ -14,7 +14,7 @@ body:
     id: version
     attributes:
       label: Release version
-      description: Semantic version with leading v (example: v1.3.0)
+      description: "Semantic version with leading v (example: v1.3.0)"
       placeholder: v1.3.0
     validations:
       required: true
@@ -49,8 +49,8 @@ body:
         - label: Create a release branch from main (named after this issue)
         - label: Update version in pyproject.toml to {{ inputs.version }}
         - label: Update RELEASES.md with notes for {{ inputs.version }}
-        - label: Commit changes with message "chore: bump version to {{ inputs.version }}"
-        - label: Push branch and open PR titled "chore: release {{ inputs.version }}"
+        - label: 'Commit changes with message "chore: bump version to {{ inputs.version }}"'
+        - label: 'Push branch and open PR titled "chore: release {{ inputs.version }}"'
         - label: Ensure PR references this issue with "Closes #<issue-number>"
   - type: checkboxes
     id: wrapup
