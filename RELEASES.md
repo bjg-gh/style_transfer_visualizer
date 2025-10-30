@@ -10,6 +10,28 @@
 
 - _None yet._
 
+## v1.3.0 - 2025-10-30
+
+**Milestone:** v1.3 UX Notifications & Contributor Docs
+
+This release streamlines contributor onboarding and clarifies model startup
+behavior with friendly download logs.
+
+### Highlights
+
+- Published a comprehensive `CONTRIBUTING.md` covering environment setup,
+  workflow expectations, labeling, and release steps, now linked from the README
+  for quick discovery (#14)
+- Added INFO-level logs when pretrained VGG19 weights are downloaded or reused
+  so users understand delays on first run (#11)
+
+### Changelog
+
+- Docs: Replaced the draft workflow notes with a polished contributor guide
+  detailing tooling commands, branch/commit standards, and release steps (#14)
+- UX: Updated VGG initialization to announce whether weights are cached or being
+  fetched, with tests enforcing both code paths (#11)
+
 ## v1.2.0 - 2025-10-29
 
 **Milestone:** v1.2 Video Polish & Runner Revamp
@@ -19,17 +41,19 @@ delivering richer comparison assets and production-ready video exports.
 
 ### Highlights
 
-- Video pipeline now supports post-process encoding, metadata tags, intro cards, GIFs,
-  and comparison frames for share-ready outputs (#26, #16, #9, #5, #13)
-- Introduced `StyleTransferRunner`, shared CLI override helpers, and modularized runtime
-  utilities for cleaner orchestration (#56, #57, #55)
+- Video pipeline now supports post-process encoding, metadata tags, intro
+  cards, GIFs, and comparison frames for share-ready outputs (#26, #16, #9,
+  #5, #13)
+- Introduced `StyleTransferRunner`, shared CLI override helpers, and
+  modularized runtime utilities for cleaner orchestration (#56, #57, #55)
 - Published reusable compare-grid API and console script backed by decomposed gallery
   modules (#58, #54)
 
 ### Changelog
 
-- Video: Added `--video-mode postprocess`, MP4 metadata tagging, optional intro title card,
-  GIF output flags, and a finale comparison frame (#26, #16, #5, #9, #13)
+- Video: Added `--video-mode postprocess`, MP4 metadata tagging, optional intro
+  title card, GIF output flags, and a finale comparison frame (#26, #16, #5, #9,
+  #13)
 - Images: Generated a final content/style/result composite image and exposed compare-grid
   helpers with a console script (#10, #58)
 - CLI: Moved override logic into the config layer for reuse across entry points (#57)
@@ -85,7 +109,8 @@ while preserving full functionality and 100% test coverage.
 
 **Milestone:** v1.0.2 Patch Maintenance
 
-This patch includes infrastructure and workflow refinements to streamline solo development and reduce CI load.
+This patch includes infrastructure and workflow refinements to streamline solo
+development and reduce CI load.
 
 ### Highlights
 
@@ -106,7 +131,8 @@ This patch includes infrastructure and workflow refinements to streamline solo d
 
 **Milestone:** First Public Release
 
-This release formalized the project’s structure and exposed it to the public with full CI and documentation support.
+This release formalized the project’s structure and exposed it to the public
+with full CI and documentation support.
 
 ### Highlights
 
