@@ -1,0 +1,70 @@
+﻿name: Release Checklist
+description: Track the steps required to publish a new release
+labels:
+  - release
+  - chore
+title: "Release: {{ inputs.version }}"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        <!-- Refer to CONTRIBUTING.md (Releases & Versioning) for usage -->
+        Use this checklist to coordinate the {{ inputs.version }} release.
+  - type: input
+    id: version
+    attributes:
+      label: Release version
+      description: Semantic version with leading v (example: v1.3.0)
+      placeholder: v1.3.0
+    validations:
+      required: true
+  - type: input
+    id: milestone
+    attributes:
+      label: Target milestone
+      description: Milestone name that this release will close
+      placeholder: v1.3 Video Polish
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Summary
+      description: Major themes or highlights that will appear in release notes
+      placeholder: Key improvements, notable fixes, UX updates...
+  - type: checkboxes
+    id: preparation
+    attributes:
+      label: Preparation
+      description: Up-front checks before version changes
+      options:
+        - label: Review all issues completed in milestone {{ inputs.milestone }}
+        - label: Confirm all merged work is on main and CI is passing
+  - type: checkboxes
+    id: implementation
+    attributes:
+      label: Implementation
+      description: Perform and verify the version bump work
+      options:
+        - label: Create a release branch from main (named after this issue)
+        - label: Update version in pyproject.toml to {{ inputs.version }}
+        - label: Update RELEASES.md with notes for {{ inputs.version }}
+        - label: Commit changes with message "chore: bump version to {{ inputs.version }}"
+        - label: Push branch and open PR titled "chore: release {{ inputs.version }}"
+        - label: Ensure PR references this issue with "Closes #<issue-number>"
+  - type: checkboxes
+    id: wrapup
+    attributes:
+      label: Wrap-up
+      description: Post-merge tasks to finalize the release
+      options:
+        - label: Squash and merge the release PR
+        - label: Tag the release locally (git tag {{ inputs.version }}) and push the tag
+        - label: Publish GitHub Release with title {{ inputs.version }} and summary
+        - label: Delete the release branch locally and on origin
+  - type: textarea
+    id: notes
+    attributes:
+      label: Follow-up
+      description: Capture any remaining work, docs to update, or rollout notes
+      placeholder: e.g., Announce in project board, update screenshots, schedule blog post

@@ -56,6 +56,11 @@ Run pre-commit hooks:
 uv run pre-commit run --all-files
 ```
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for workflow details, coding standards,
+and testing expectations before opening an issue or pull request.
+
 ---
 
 ## Usage
