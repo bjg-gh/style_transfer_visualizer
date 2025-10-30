@@ -3,13 +3,56 @@ description: Track the steps required to publish a new release
 labels:
   - release
   - chore
-title: "Release: {{ inputs.version }}"
+title: Release: {{ inputs.version }}
 body:
   - type: markdown
     attributes:
       value: |
         <!-- Refer to CONTRIBUTING.md (Releases & Versioning) for usage -->
         Use this checklist to coordinate the {{ inputs.version }} release.
+  - type: markdown
+    attributes:
+      value: |
+        ## Step-by-step workflow
+
+        **1. Review the milestone**
+        - Confirm every issue assigned to milestone {{ inputs.milestone }} is closed.
+        - Capture any notable highlights for the release notes.
+
+        **2. Prepare the release branch**
+        ```sh
+        git checkout main
+        git pull origin main
+        git checkout -b <issue-number>-release-{{ inputs.version }}
+        ```
+
+        **3. Update the versioned artifacts**
+        - Edit `pyproject.toml` and set `[project] version` to {{ inputs.version }}.
+        - Update `RELEASES.md` with a section for {{ inputs.version }}.
+
+        **4. Commit and push**
+        ```sh
+        git add pyproject.toml RELEASES.md
+        git commit -m "chore: bump version to {{ inputs.version }}"
+        git push origin <issue-number>-release-{{ inputs.version }}
+        ```
+
+        **5. Open the release PR**
+        - Title: `chore: release {{ inputs.version }}`
+        - Link back to this issue with `Closes #<issue-number>`.
+
+        **6. Merge, tag, and publish**
+        - Squash and merge the PR after checks pass.
+        - Tag locally and push:
+          ```sh
+          git tag {{ inputs.version }}
+          git push origin {{ inputs.version }}
+          ```
+        - Publish the GitHub Release titled {{ inputs.version }} with the highlights collected earlier.
+
+        **7. Wrap up**
+        - Delete the release branch locally and on origin.
+        - Note any follow-up tasks or announcements below.
   - type: input
     id: version
     attributes:
