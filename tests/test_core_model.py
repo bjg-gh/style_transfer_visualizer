@@ -7,7 +7,10 @@ Covers:
 - StyleContentModel forward loss computation
 - Factory: prepare_model_and_input uses OptimizationConfig
 """
+import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
+from urllib.parse import urlparse
 
 import pytest
 import torch
@@ -209,3 +212,66 @@ class TestFactoryFunction:
                     found_relu = True
                     assert layer.inplace is False
         assert found_relu is True
+
+
+class TestInitializeVGG:
+    """Tests for logging behavior around VGG19 initialization."""
+
+    @pytest.fixture(autouse=True)
+    def _patch_vgg(
+        self,
+        mocker: MockerFixture,
+    ) -> None:
+        """Patch vgg19 constructor to avoid heavy model creation."""
+        fake_features = mocker.Mock()
+        fake_features.eval.return_value = fake_features
+        fake_features.parameters.return_value = []
+        mock_vgg = mocker.Mock(features=fake_features)
+        mocker.patch.object(stv_core_model, "vgg19", return_value=mock_vgg)
+
+    @staticmethod
+    def _weight_path(tmp_path: Path) -> Path:
+        filename = Path(
+            urlparse(stv_core_model.VGG19_Weights.IMAGENET1K_V1.url).path,
+        ).name
+        return tmp_path / "checkpoints" / filename
+
+    def test_logs_download_when_weights_missing(
+        self,
+        tmp_path: Path,
+        mocker: MockerFixture,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Ensure a download notice is logged when weights are absent."""
+        caplog.set_level(logging.INFO, logger="style_transfer")
+        mocker.patch("torch.hub.get_dir", return_value=str(tmp_path))
+        expected_path = self._weight_path(tmp_path)
+
+        stv_core_model.initialize_vgg()
+
+        assert any(
+            "Downloading VGG19 weights" in message
+            and str(expected_path) in message
+            for message in caplog.messages
+        )
+
+    def test_logs_cache_hit_when_weights_present(
+        self,
+        tmp_path: Path,
+        mocker: MockerFixture,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Ensure a cache notice is logged when weights already exist."""
+        caplog.set_level(logging.INFO, logger="style_transfer")
+        mocker.patch("torch.hub.get_dir", return_value=str(tmp_path))
+        cached_path = self._weight_path(tmp_path)
+        cached_path.parent.mkdir(parents=True, exist_ok=True)
+        cached_path.touch()
+
+        stv_core_model.initialize_vgg()
+
+        assert any(
+            "Using cached VGG19 weights" in message
+            and str(cached_path) in message
+            for message in caplog.messages
+        )

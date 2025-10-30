@@ -12,6 +12,9 @@ Classes:
     style layers using a frozen VGG19 encoder.
 """
 
+from pathlib import Path
+from urllib.parse import urlparse
+
 import torch
 from torch import nn
 from torch.nn.functional import mse_loss
@@ -19,6 +22,7 @@ from torchvision.models import VGG19_Weights, vgg19
 
 from style_transfer_visualizer.config import OptimizationConfig
 from style_transfer_visualizer.constants import GRAM_MATRIX_CLAMP_MAX
+from style_transfer_visualizer.logging_utils import logger
 from style_transfer_visualizer.type_defs import InitMethod, TensorList
 
 
@@ -98,7 +102,16 @@ def initialize_input(
 
 def initialize_vgg() -> nn.Module:
     """Load pretrained VGG19 model for feature extraction."""
-    vgg = vgg19(weights=VGG19_Weights.IMAGENET1K_V1).features.eval()
+    weights = VGG19_Weights.IMAGENET1K_V1
+    cache_dir = Path(torch.hub.get_dir()) / "checkpoints"
+    cache_path = cache_dir / Path(urlparse(weights.url).path).name
+
+    if cache_path.exists():
+        logger.info("Using cached VGG19 weights at %s", cache_path)
+    else:
+        logger.info("Downloading VGG19 weights to %s", cache_path)
+
+    vgg = vgg19(weights=weights).features.eval()
     for p in vgg.parameters():
         p.requires_grad_(False)  # noqa: FBT003
     return vgg
