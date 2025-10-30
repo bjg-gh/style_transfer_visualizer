@@ -1,5 +1,9 @@
 # Release Notes
 
+> To initiate a release, open **New Issue -> Release Checklist**. The form is
+> stored at `.github/ISSUE_TEMPLATE/release.yml` and mirrors the steps documented
+> in `CONTRIBUTING.md`.
+
 ## Unreleased
 
 ### Added
