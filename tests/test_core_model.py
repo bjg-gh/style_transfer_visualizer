@@ -62,6 +62,7 @@ class TestInitializeInput:
                 "content",
             )
 
+    @pytest.mark.slow
     @pytest.mark.parametrize("device_name", ["cpu", "cuda"])
     def test_device_preservation(
         self,

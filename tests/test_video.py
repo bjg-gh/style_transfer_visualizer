@@ -15,6 +15,8 @@ from style_transfer_visualizer.config import VideoConfig
 from style_transfer_visualizer.config_defaults import DEFAULT_VIDEO_QUALITY
 from style_transfer_visualizer.type_defs import VideoMode
 
+pytestmark = pytest.mark.visual
+
 DEFAULT_INTRO_DURATION = 0.0
 DEFAULT_OUTRO_DURATION = 0.0
 EXPECTED_CAPTURED_FRAMES = 2

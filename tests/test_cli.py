@@ -849,6 +849,7 @@ class TestCLIMainFlow:
         assert called.get("ran") is True
 
 
+@pytest.mark.slow
 @pytest.mark.integration
 def test_script_main_entry(tmp_path: Path) -> None:
     """Integration test: execute script via subprocess with real images."""

@@ -12,6 +12,8 @@ import pytest
 
 from style_transfer_visualizer.visualization import metrics as viz_metrics
 
+pytestmark = pytest.mark.visual
+
 
 class _DummyFigure:
     def __init__(self, saved: dict[str, Any]) -> None:

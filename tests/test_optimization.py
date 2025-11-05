@@ -25,6 +25,8 @@ import style_transfer_visualizer.optimization as stv_optimization
 import style_transfer_visualizer.video as stv_video
 from style_transfer_visualizer.config import StyleTransferConfig
 
+pytestmark = pytest.mark.slow
+
 
 @pytest.fixture
 def setup_model_and_images(

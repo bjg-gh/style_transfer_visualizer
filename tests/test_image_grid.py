@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, cast
 import pytest
 from PIL import Image, ImageFont
 
+pytestmark = pytest.mark.visual
+
 try:
     from style_transfer_visualizer.constants import (
         COLOR_BLACK,

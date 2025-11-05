@@ -17,6 +17,8 @@ from style_transfer_visualizer.constants import RESOLUTION_FULL_HD
 from style_transfer_visualizer.gallery import ComparisonRenderOptions
 from style_transfer_visualizer.gallery.cli import build_parser, main
 
+pytestmark = pytest.mark.visual
+
 GRID_TARGET_HEIGHT = 256
 GRID_PAD = 8
 GRID_BORDER = 2
@@ -361,6 +363,7 @@ def test_build_parser_validates_arguments() -> None:
         parser.parse_args(["--content", "c.jpg", "--style", "s.jpg", "--pad", "-1"])
 
 
+@pytest.mark.integration
 def test_tools_compare_grid_wrapper_executes(monkeypatch: pytest.MonkeyPatch) -> None:
     """tools/compare_grid.py delegates to the shared CLI main."""
     root = Path(__file__).parent.parent
