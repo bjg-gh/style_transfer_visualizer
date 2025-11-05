@@ -6,17 +6,29 @@ labels:
   - release
   - chore
 body:
-  - type: input
-    id: version
-    attributes:
-      label: Version number
-      description: Provide the version to release (e.g., 1.3.0).
-      placeholder: 1.3.0
-    validations:
-      required: true
   - type: markdown
     attributes:
       value: |
+        ### Version number
+        Provide the version to release in the format `X.X.X` (e.g., `1.3.0`).
+  - type: input
+    id: version
+    attributes:
+      label: "<!-- Version number"
+      placeholder: 1.3.0
+    validations:
+      required: true
+      regex: '^\d+\.\d+\.\d+$'
+      error: Version must be in X.X.X format (numbers only).
+  - type: textarea
+    id: release_body
+    attributes:
+      label: ""
+      render: markdown
+      value: |
+        -->
+        Release v{{ inputs.version }}
+
         This issue tracks the version bump, tagging, and release publishing steps for `v{{ inputs.version }}`.
 
         ## Tasks
@@ -46,3 +58,5 @@ body:
         ## Notes
         - Link this issue to the release PR using `Closes #XXX` or mention it manually.
         - Delete the release branch after merging.
+    validations:
+      required: true
