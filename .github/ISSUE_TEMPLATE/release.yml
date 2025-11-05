@@ -1,70 +1,48 @@
-﻿name: Release Checklist
-description: Track the steps required to publish a new release
+﻿
+name: Release
+description: Track release tasks for a version bump.
+title: Release v{{ inputs.version }}
 labels:
   - release
   - chore
-title: "Release: {{ inputs.version }}"
 body:
-  - type: markdown
-    attributes:
-      value: |
-        <!-- Refer to CONTRIBUTING.md (Releases & Versioning) for usage -->
-        Use this checklist to coordinate the {{ inputs.version }} release.
   - type: input
     id: version
     attributes:
-      label: Release version
-      description: "Semantic version with leading v (example: v1.3.0)"
-      placeholder: v1.3.0
+      label: Version number
+      description: Provide the version to release (e.g., 1.3.0).
+      placeholder: 1.3.0
     validations:
       required: true
-  - type: input
-    id: milestone
+  - type: markdown
     attributes:
-      label: Target milestone
-      description: Milestone name that this release will close
-      placeholder: v1.3 Video Polish
-    validations:
-      required: true
-  - type: textarea
-    id: scope
-    attributes:
-      label: Summary
-      description: Major themes or highlights that will appear in release notes
-      placeholder: Key improvements, notable fixes, UX updates...
-  - type: checkboxes
-    id: preparation
-    attributes:
-      label: Preparation
-      description: Up-front checks before version changes
-      options:
-        - label: Review all issues completed in milestone {{ inputs.milestone }}
-        - label: Confirm all merged work is on main and CI is passing
-  - type: checkboxes
-    id: implementation
-    attributes:
-      label: Implementation
-      description: Perform and verify the version bump work
-      options:
-        - label: Create a release branch from main (named after this issue)
-        - label: Update version in pyproject.toml to {{ inputs.version }}
-        - label: Update RELEASES.md with notes for {{ inputs.version }}
-        - label: 'Commit changes with message "chore: bump version to {{ inputs.version }}"'
-        - label: 'Push branch and open PR titled "chore: release {{ inputs.version }}"'
-        - label: Ensure PR references this issue with "Closes #<issue-number>"
-  - type: checkboxes
-    id: wrapup
-    attributes:
-      label: Wrap-up
-      description: Post-merge tasks to finalize the release
-      options:
-        - label: Squash and merge the release PR
-        - label: Tag the release locally (git tag {{ inputs.version }}) and push the tag
-        - label: Publish GitHub Release with title {{ inputs.version }} and summary
-        - label: Delete the release branch locally and on origin
-  - type: textarea
-    id: notes
-    attributes:
-      label: Follow-up
-      description: Capture any remaining work, docs to update, or rollout notes
-      placeholder: e.g., Announce in project board, update screenshots, schedule blog post
+      value: |
+        This issue tracks the version bump, tagging, and release publishing steps for `v{{ inputs.version }}`.
+
+        ## Tasks
+
+        - [ ] Review all issues completed in milestone `v{{ inputs.version }}`
+        - [ ] Create a release branch using this issue
+        - [ ] Update `version` in `pyproject.toml` to `{{ inputs.version }}`
+        - [ ] Add release notes to RELEASES.md
+        - [ ] Commit with:
+          ```sh
+          git commit -m "chore: bump version to {{ inputs.version }}"
+          ```
+        - [ ] Push and open PR titled:
+          ```
+          chore: release v{{ inputs.version }}
+          ```
+        - [ ] Squash and merge PR
+        - [ ] Tag the release:
+          ```sh
+          git tag v{{ inputs.version }}
+          git push origin v{{ inputs.version }}
+          ```
+        - [ ] Create GitHub Release with:
+          - Title: `v{{ inputs.version }}`
+          - Description: Closed issues, changelog, or summary
+
+        ## Notes
+        - Link this issue to the release PR using `Closes #XXX` or mention it manually.
+        - Delete the release branch after merging.
