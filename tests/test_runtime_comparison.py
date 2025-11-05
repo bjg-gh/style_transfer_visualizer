@@ -12,6 +12,8 @@ from style_transfer_visualizer.gallery import ComparisonRenderOptions
 from style_transfer_visualizer.runtime import comparison
 from style_transfer_visualizer.runtime.comparison import ComparisonRequest
 
+pytestmark = pytest.mark.visual
+
 
 @pytest.fixture
 def sample_images(tmp_path: Path) -> tuple[Path, Path, Path]:

@@ -56,6 +56,7 @@ class TestImageLoading:
         loaded = stv_image_io.load_image(path)
         assert loaded.size == (width, height)
 
+    @pytest.mark.slow
     @pytest.mark.parametrize("device_name", ["cpu", "cuda"])
     def test_device_loading(
         self,
@@ -72,6 +73,7 @@ class TestImageLoading:
         assert tensor.device.type == device.type
 
 
+@pytest.mark.slow
 class TestTransforms:
     """Test image tensor conversion and normalization behavior."""
 
@@ -195,6 +197,7 @@ class TestImageOutputPreparation:
             assert out.max() <= 1.0
             assert out.shape == tensor.shape
 
+    @pytest.mark.slow
     @pytest.mark.parametrize("device_name", ["cpu", "cuda"])
     def test_device_preserved(self, device_name: str) -> None:
         """Test output remains on the original device."""

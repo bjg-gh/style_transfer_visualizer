@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from style_transfer_visualizer.constants import COLOR_GREY, COLOR_WHITE
 from style_transfer_visualizer.image_grid import core, layouts, naming
+
+pytestmark = pytest.mark.visual
 
 
 def test_core_builds_panel(sample_image: Image.Image) -> None:
