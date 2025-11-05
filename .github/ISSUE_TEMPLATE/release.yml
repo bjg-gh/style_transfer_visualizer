@@ -14,19 +14,18 @@ body:
   - type: input
     id: version
     attributes:
-      label: "<!-- Version number"
+      label: "<!-- Version number -->"
       placeholder: 1.3.0
     validations:
       required: true
-      regex: '^\d+\.\d+\.\d+$'
+      pattern: '^\d+\.\d+\.\d+$'
       error: Version must be in X.X.X format (numbers only).
   - type: textarea
     id: release_body
     attributes:
-      label: ""
+      label: "<!-- Release body -->"
       render: markdown
       value: |
-        -->
         Release v{{ inputs.version }}
 
         This issue tracks the version bump, tagging, and release publishing steps for `v{{ inputs.version }}`.
