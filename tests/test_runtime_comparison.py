@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import TypedDict
 
@@ -63,6 +64,65 @@ def test_render_comparison_image_inputs_only(
     assert options.result_path is None
     assert options.target_size == (32, 24)
 
+
+@pytest.mark.parametrize(
+    "include_result",
+    [False, True],
+    ids=["inputs-only", "with-result"],
+)
+def test_render_comparison_image_real_world_resolutions(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    real_world_resolution: tuple[int, int],
+    make_image_file: Callable[[tuple[int, int], str], Path],
+    *,
+    include_result: bool,
+) -> None:
+    """Real-world resolutions propagate to render options unmodified."""
+    width, height = real_world_resolution
+    content = make_image_file(real_world_resolution, "red")
+    style = make_image_file(
+        (max(64, width // 2), max(64, height // 2)),
+        "blue",
+    )
+    result_img = make_image_file(real_world_resolution, "green")
+
+    recorded: dict[str, ComparisonRenderOptions] = {}
+
+    def fake_render(options: ComparisonRenderOptions) -> Path:
+        recorded["options"] = options
+        return options.out_path if options.out_path is not None else tmp_path / "fallback.png"
+
+    monkeypatch.setattr(
+        comparison,
+        "render_comparison",
+        fake_render,
+    )
+
+    out = comparison.render_comparison_image(
+        content_path=content,
+        style_path=style,
+        output_dir=tmp_path,
+        include_result=include_result,
+        result_path=result_img if include_result else None,
+    )
+
+    expected = comparison.comparison_output_path(
+        tmp_path,
+        content,
+        style,
+        include_result=include_result,
+    )
+    assert out == expected
+
+    options = recorded["options"]
+    assert options.target_size == (width, height)
+    if include_result:
+        assert options.layout == "gallery-stacked-left"
+        assert options.result_path == result_img
+    else:
+        assert options.layout == "gallery-two-across"
+        assert options.result_path is None
 
 def test_render_comparison_image_with_result(
     monkeypatch: pytest.MonkeyPatch,

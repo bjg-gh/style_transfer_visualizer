@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import pytest
+from hypothesis import given, strategies as st
 from PIL import Image, ImageFont
 
 pytestmark = pytest.mark.visual
@@ -187,6 +188,24 @@ def test_scale_images_to_target_and_fit() -> None:
     assert ch <= MAX_CH
     assert all(im.size[0] <= MAX_EDGE for im in fitted)
 
+@given(
+    width=st.integers(min_value=64, max_value=640),
+    height=st.integers(min_value=64, max_value=640),
+    target_height=st.integers(min_value=64, max_value=720),
+)
+def test_scale_images_to_target_preserves_aspect(
+    width: int,
+    height: int,
+    target_height: int,
+) -> None:
+    """Scaling to a target height keeps the image aspect ratio."""
+    img = Image.new("RGB", (width, height))
+    scaled = ig_core.scale_images_to_target([img], target_height, None)
+    sized_img = scaled[0]
+    assert sized_img.size[1] == target_height
+    expected_w = max(1, round(width * target_height / height))
+    assert sized_img.size[0] == expected_w
+
 
 def test_paste_horizontally_no_error() -> None:
     """Pasting positions images without exception."""
@@ -220,6 +239,21 @@ def test_make_horizontal_grid_variants() -> None:
 
     with pytest.raises(ValueError, match="No images provided"):
         ig_layouts.make_horizontal_grid([], target_height=10)
+
+def test_make_horizontal_grid_real_world_canvas(
+    real_world_resolution: tuple[int, int],
+) -> None:
+    """Explicit target_size produces an exact canvas for common ratios."""
+    width, height = real_world_resolution
+    ims = [_mk_rgb(1280, 720, "red"), _mk_rgb(960, 540, "blue"), _mk_rgb(640, 480, "green")]
+    canvas = ig_layouts.make_horizontal_grid(
+        ims,
+        target_height=None,
+        target_size=real_world_resolution,
+        pad=PAD_MED,
+        border_px=BORDER_PX,
+    )
+    assert canvas.size == (width, height)
 
 
 def test_save_comparison_grid(

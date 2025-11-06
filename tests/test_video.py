@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Self, cast
 from unittest.mock import patch
@@ -563,6 +564,28 @@ def test_build_intro_frame_resizes_when_gallery_too_large(
         style_image,
     )
     assert intro.shape == (64, 64, 3)
+
+
+@pytest.mark.slow
+def test_build_intro_frame_real_world_resolutions(
+    real_world_resolution: tuple[int, int],
+    make_image_file: Callable[[tuple[int, int], str], Path],
+) -> None:
+    """Intro frame rendering preserves content size for large canvases."""
+    width, height = real_world_resolution
+    content = make_image_file(real_world_resolution, "red")
+    style = make_image_file(
+        (max(64, width // 2), max(64, height // 2)),
+        "blue",
+    )
+
+    intro = stv_video._build_intro_frame(  # noqa: SLF001
+        content,
+        style,
+    )
+
+    assert intro.shape == (height, width, 3)
+    assert intro.dtype == np.uint8
 
 
 def test_prepare_intro_segment_returns_none_when_intro_disabled(
