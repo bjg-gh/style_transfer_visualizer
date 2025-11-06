@@ -10,6 +10,31 @@
 
 - _None yet._
 
+## v1.4.0 - 2025-11-06
+
+**Milestone:** v1.4 Testing & Coverage
+
+This release hardens the test matrix with real-world aspect ratios, clarifies
+pytest markers for longer-running suites, and restores the detailed release
+checklist instructions for future milestones.
+
+### Highlights
+
+- Exercised the optimization pipeline across widescreen, portrait, and other
+  non-square resolutions to guard against regressions (#12)
+- Standardized pytest marks for slow, visual, and integration scenarios so
+  contributors can triage runs quickly (#71)
+- Reinstated the step-by-step release guidance inside the issue template (#75)
+
+### Changelog
+
+- Tests: Added coverage for common 16:9, 9:16, and 720p transforms with shape
+  validation to ensure pipeline stability (#12)
+- Tests: Tagged long-running, visual, and integration suites with the correct
+  pytest markers to align with contribution guidelines (#71)
+- Docs: Brought back the release template instructions from the historical
+  workflow guide to keep the checklist actionable (#75)
+
 ## v1.3.0 - 2025-10-30
 
 **Milestone:** v1.3 UX Notifications & Contributor Docs
