@@ -12,6 +12,7 @@ Note:
 """
 import shutil
 import tempfile
+import uuid
 from collections.abc import Callable, Generator
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,31 @@ if torch.cuda.is_available():
     STYLE_CONFIG_VARIANTS.append(
         pytest.param({"device": "cuda", "mode": "realtime"}, id="cuda-realtime"),
     )
+
+REAL_WORLD_RESOLUTION_CASES = [
+    pytest.param((1920, 1080), id="hd-1080p"),
+    pytest.param((1280, 720), id="hd-720p"),
+    pytest.param((1080, 1920), id="portrait-1080p"),
+]
+
+
+@pytest.fixture(params=REAL_WORLD_RESOLUTION_CASES)
+def real_world_resolution(
+    request: pytest.FixtureRequest,
+) -> tuple[int, int]:
+    """Provide common real-world resolution cases to tests."""
+    return request.param
+
+
+@pytest.fixture
+def make_image_file(tmp_path: Path) -> Callable[[tuple[int, int], str], Path]:
+    """Create an RGB image of the requested size and return its path."""
+    def _make(size: tuple[int, int], color: str = "white") -> Path:
+        file_path = tmp_path / f"img_{size[0]}x{size[1]}_{uuid.uuid4().hex}.png"
+        Image.new(COLOR_MODE_RGB, size, color=color).save(file_path)
+        return file_path
+
+    return _make
 
 
 @pytest.fixture

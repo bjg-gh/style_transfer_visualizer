@@ -8,6 +8,8 @@ Covers:
 """
 
 import tempfile
+from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 import torch
@@ -72,6 +74,23 @@ class TestImageLoading:
                                                normalize=True)
         assert tensor.device.type == device.type
 
+    def test_load_image_to_tensor_real_world_sizes(
+        self,
+        real_world_resolution: tuple[int, int],
+        make_image_file: Callable[[tuple[int, int], str], Path],
+        test_device: torch.device,
+    ) -> None:
+        """Loading to tensor preserves axes for common resolutions."""
+        width, height = real_world_resolution
+        path = make_image_file(real_world_resolution, "orange")
+        tensor = stv_image_io.load_image_to_tensor(
+            str(path),
+            test_device,
+            normalize=True,
+        )
+        assert tensor.shape == (1, 3, height, width)
+        assert tensor.device.type == test_device.type
+
 
 @pytest.mark.slow
 class TestTransforms:
@@ -101,6 +120,22 @@ class TestTransforms:
         assert t.shape[0] == 1
         assert t.shape[1] == 3  # noqa: PLR2004
         assert t.device.type == test_device.type
+
+    def test_apply_transforms_real_world_resolutions(
+        self,
+        real_world_resolution: tuple[int, int],
+        test_device: torch.device,
+    ) -> None:
+        """Transform output matches the requested resolution layout."""
+        width, height = real_world_resolution
+        img = Image.new(COLOR_MODE_RGB, (width, height))
+        tensor = stv_image_io.apply_transforms(
+            img,
+            device=test_device,
+            normalize=False,
+        )
+        assert tensor.shape == (1, 3, height, width)
+        assert tensor.device.type == test_device.type
 
     def test_apply_transforms_black_white(
         self,
