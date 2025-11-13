@@ -8,7 +8,7 @@ Covers:
 - Frame saving, intro crossfade, and callback handling
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 import numpy as np
@@ -26,6 +26,35 @@ import style_transfer_visualizer.video as stv_video
 from style_transfer_visualizer.config import StyleTransferConfig
 
 pytestmark = pytest.mark.slow
+
+
+class MultiProbeSGD(torch.optim.SGD):
+    """Optimizer that invokes the closure multiple times per accepted step."""
+
+    def __init__(
+        self,
+        params: Iterable[Tensor],
+        *,
+        lr: float = 0.1,
+        probes: int = 3,
+    ) -> None:
+        super().__init__(params, lr=lr)
+        self.probes = probes
+        self.closure_calls = 0
+
+    def step(
+        self,
+        closure: Callable[[], float] | None = None,
+    ) -> float:  # type: ignore[override]
+        if closure is None:
+            result = super().step()
+            return 0.0 if result is None else float(result)
+        loss = 0.0
+        for _ in range(self.probes):
+            loss = closure()
+            self.closure_calls += 1
+        super().step()
+        return loss
 
 
 @pytest.fixture
@@ -403,6 +432,128 @@ class TestOptimization:
 
         assert gif_collector.frames, "GIF collector should capture frames"
 
+    def test_timelapse_frames_saved_once_per_step_with_multi_probe_optimizer(
+        self,
+        setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
+        mocker: MockerFixture,
+        make_runner_config: Callable[..., StyleTransferConfig],
+    ) -> None:
+        """Frame capture happens once per accepted step even with re-entrant closure."""
+        model, _, _, input_img = setup_model_and_images
+        optimizer = MultiProbeSGD([input_img], probes=4)
+
+        config = make_runner_config(
+            optimization={"steps": 2},
+            video={"save_every": 1},
+        )
+
+        progress = mocker.MagicMock()
+        progress.set_postfix = mocker.MagicMock()
+        video_writer = mocker.MagicMock()
+
+        prepare_mock = mocker.patch.object(
+            stv_image_io,
+            "prepare_image_for_output",
+            return_value=torch.rand_like(input_img),
+        )
+
+        runner = stv_optimization.OptimizationRunner(
+            model,
+            input_img,
+            config,
+            optimizer=optimizer,
+            progress_bar=progress,
+            video_writer=video_writer,
+        )
+
+        runner.run()
+
+        assert (
+            optimizer.closure_calls
+            == config.optimization.steps * optimizer.probes
+        )
+        assert runner._closure_calls == optimizer.closure_calls  # noqa: SLF001
+        assert runner._step_index == config.optimization.steps  # noqa: SLF001
+        assert video_writer.append_data.call_count == config.optimization.steps
+        assert prepare_mock.call_count == config.optimization.steps
+
+    def test_intro_crossfade_runs_once_with_multi_probe_optimizer(
+        self,
+        setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
+        mocker: MockerFixture,
+        make_runner_config: Callable[..., StyleTransferConfig],
+    ) -> None:
+        """Intro crossfades (video and GIF) fire once per accepted step."""
+        model, _, _, input_img = setup_model_and_images
+        optimizer = MultiProbeSGD([input_img], probes=3)
+
+        config = make_runner_config(
+            optimization={"steps": 1},
+            video={
+                "save_every": 1,
+                "intro_enabled": True,
+                "gif_include_intro": True,
+            },
+        )
+
+        video_writer = mocker.MagicMock()
+        gif_collector = mocker.MagicMock()
+        progress = mocker.MagicMock()
+        progress.set_postfix = mocker.MagicMock()
+
+        prepare_mock = mocker.patch.object(
+            stv_image_io,
+            "prepare_image_for_output",
+            return_value=torch.rand_like(input_img),
+        )
+
+        height, width = input_img.shape[-2:]
+        intro_frame = np.zeros((height, width, 3), dtype=np.uint8)
+
+        crossfade_counts = {"video": 0, "gif": 0}
+
+        def fake_crossfade(
+            writer_arg: object,
+            _start_frame: np.ndarray,
+            _end_frame: np.ndarray,
+            _frame_count: int,
+        ) -> None:
+            if writer_arg is video_writer:
+                crossfade_counts["video"] += 1
+            if writer_arg is gif_collector:
+                crossfade_counts["gif"] += 1
+
+        mocker.patch.object(
+            stv_video,
+            "append_crossfade",
+            side_effect=fake_crossfade,
+        )
+
+        runner = stv_optimization.OptimizationRunner(
+            model,
+            input_img,
+            config,
+            optimizer=optimizer,
+            progress_bar=progress,
+            video_writer=video_writer,
+            gif_collector=gif_collector,
+            intro_last_frame=intro_frame,
+            intro_crossfade_frames=3,
+        )
+
+        runner.run()
+
+        assert runner._closure_calls == optimizer.closure_calls  # noqa: SLF001
+        assert (
+            optimizer.closure_calls
+            == config.optimization.steps * optimizer.probes
+        )
+        assert crossfade_counts["video"] == config.optimization.steps
+        assert crossfade_counts["gif"] == config.optimization.steps
+        assert video_writer.append_data.call_count == config.optimization.steps
+        assert gif_collector.append_data.call_count == config.optimization.steps
+        assert prepare_mock.call_count == config.optimization.steps
+
     def test_runner_csv_logger_failure_logs_error(
         self,
         setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
@@ -496,6 +647,49 @@ class TestOptimization:
         assert started == [1]
         assert len(ended) == 1
 
+    def test_log_optimization_summary_skips_when_no_steps(
+        self,
+        setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
+        make_runner_config: Callable[..., StyleTransferConfig],
+        caplog: LogCaptureFixture,
+    ) -> None:
+        """Summary logging is suppressed before any steps run."""
+        model, _, _, input_img = setup_model_and_images
+        config = make_runner_config()
+        runner = stv_optimization.OptimizationRunner(
+            model,
+            input_img,
+            config,
+        )
+
+        caplog.set_level("INFO")
+        runner._log_optimization_summary()  # noqa: SLF001
+        assert "Optimization finished" not in caplog.text
+
+    def test_runner_raises_when_closure_skips_metrics(
+        self,
+        setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
+        make_runner_config: Callable[..., StyleTransferConfig],
+    ) -> None:
+        """Run() surfaces an error when the closure omits metrics."""
+        model, _, _, input_img = setup_model_and_images
+        config = make_runner_config()
+        optimizer = torch.optim.SGD([input_img])
+
+        class BrokenRunner(stv_optimization.OptimizationRunner):
+            def _closure(self) -> float:  # type: ignore[override]
+                return 0.0
+
+        runner = BrokenRunner(
+            model,
+            input_img,
+            config,
+            optimizer=optimizer,
+        )
+
+        with pytest.raises(RuntimeError, match="did not record metrics"):
+            runner.run()
+
     def test_runner_rejects_conflicting_optimizer_args(
         self,
         setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
@@ -585,6 +779,30 @@ class TestOptimization:
         )
 
         assert isinstance(runner.optimizer, torch.optim.LBFGS)
+
+    def test_lbfgs_inner_loop_respects_config(
+        self,
+        setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
+        make_runner_config: Callable[..., StyleTransferConfig],
+    ) -> None:
+        """LBFGS is instantiated with configured inner-loop bounds."""
+        model, _, _, input_img = setup_model_and_images
+        config = make_runner_config(
+            optimization={
+                "lbfgs_max_iter": 3,
+                "lbfgs_max_eval": 2,
+            },
+        )
+
+        runner = stv_optimization.OptimizationRunner(
+            model,
+            input_img,
+            config,
+        )
+
+        params = runner.optimizer.param_groups[0]
+        assert params["max_iter"] == 3  # noqa: PLR2004
+        assert params["max_eval"] == 2  # noqa: PLR2004
 
     def test_logging_error_callback_invoked(
         self,
@@ -706,8 +924,13 @@ class TestOptimization:
             video_writer=writer,
         )
 
-        value = torch.tensor(1.0)
-        runner._maybe_write_video_frame(1, value, value, value)  # noqa: SLF001
+        metrics = stv_optimization.StepMetrics(
+            step=1,
+            style_loss=1.0,
+            content_loss=1.0,
+            total_loss=1.0,
+        )
+        runner._maybe_write_video_frame(metrics)  # noqa: SLF001
 
         writer.append_data.assert_not_called()
         progress.set_postfix.assert_not_called()
@@ -764,8 +987,13 @@ class TestOptimization:
             callbacks=callbacks,
         )
 
-        value = torch.tensor(1.0)
-        runner._maybe_write_video_frame(1, value, value, value)  # noqa: SLF001
+        metrics = stv_optimization.StepMetrics(
+            step=1,
+            style_loss=1.0,
+            content_loss=1.0,
+            total_loss=1.0,
+        )
+        runner._maybe_write_video_frame(metrics)  # noqa: SLF001
 
         assert frames == [1]
         assert len(writer.frames) == 1

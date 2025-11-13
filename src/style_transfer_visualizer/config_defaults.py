@@ -9,6 +9,8 @@ DEFAULT_LEARNING_RATE = 1.0
 DEFAULT_INIT_METHOD: InitMethod = "random"
 DEFAULT_SEED = 0
 DEFAULT_NORMALIZE = True
+DEFAULT_LBFGS_MAX_ITER = 1
+DEFAULT_LBFGS_MAX_EVAL = 1
 # From torchvision.models.vgg19.
 # See:
 # https://github.com/pytorch/vision/blob/main/torchvision/models/vgg.py

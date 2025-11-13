@@ -181,6 +181,8 @@ class TestFactoryFunction:
         assert input_img.requires_grad is True
         assert any(p is input_img for p in optimizer.param_groups[0]["params"])
         assert optimizer.param_groups[0]["lr"] == pytest.approx(opt_cfg.lr)
+        assert optimizer.param_groups[0]["max_iter"] == opt_cfg.lbfgs_max_iter
+        assert optimizer.param_groups[0]["max_eval"] == opt_cfg.lbfgs_max_eval
 
         # Targets should be set by the factory.
         assert model.style_targets is not None

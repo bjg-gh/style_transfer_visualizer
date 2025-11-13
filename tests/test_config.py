@@ -25,6 +25,8 @@ from style_transfer_visualizer.config_defaults import (
     DEFAULT_GIF_INCLUDE_INTRO,
     DEFAULT_GIF_INCLUDE_OUTRO,
     DEFAULT_INIT_METHOD,
+    DEFAULT_LBFGS_MAX_EVAL,
+    DEFAULT_LBFGS_MAX_ITER,
     DEFAULT_LEARNING_RATE,
     DEFAULT_LOG_EVERY,
     DEFAULT_OUTPUT_DIR,
@@ -139,6 +141,8 @@ def test_optimization_config_negative_steps() -> None:
             lr=DEFAULT_LEARNING_RATE,
             seed=DEFAULT_SEED,
             init_method=DEFAULT_INIT_METHOD,
+            lbfgs_max_iter=DEFAULT_LBFGS_MAX_ITER,
+            lbfgs_max_eval=DEFAULT_LBFGS_MAX_EVAL,
         )
     assert "steps" in str(exc_info.value)
 
@@ -153,6 +157,8 @@ def test_optimization_config_invalid_lr() -> None:
             content_w=DEFAULT_CONTENT_WEIGHT,
             seed=DEFAULT_SEED,
             init_method=DEFAULT_INIT_METHOD,
+            lbfgs_max_iter=DEFAULT_LBFGS_MAX_ITER,
+            lbfgs_max_eval=DEFAULT_LBFGS_MAX_EVAL,
         )
     assert "lr" in str(exc_info.value)
 
@@ -167,6 +173,8 @@ def test_optimization_config_negative_style_w() -> None:
             lr=DEFAULT_LEARNING_RATE,
             seed=DEFAULT_SEED,
             init_method=DEFAULT_INIT_METHOD,
+            lbfgs_max_iter=DEFAULT_LBFGS_MAX_ITER,
+            lbfgs_max_eval=DEFAULT_LBFGS_MAX_EVAL,
         )
     assert "style_w" in str(exc_info.value)
 
@@ -181,6 +189,8 @@ def test_optimization_config_negative_content_w() -> None:
             lr=DEFAULT_LEARNING_RATE,
             seed=DEFAULT_SEED,
             init_method=DEFAULT_INIT_METHOD,
+            lbfgs_max_iter=DEFAULT_LBFGS_MAX_ITER,
+            lbfgs_max_eval=DEFAULT_LBFGS_MAX_EVAL,
         )
     assert "content_w" in str(exc_info.value)
 
@@ -195,6 +205,8 @@ def test_optimization_config_negative_seed() -> None:
             content_w=DEFAULT_CONTENT_WEIGHT,
             lr=DEFAULT_LEARNING_RATE,
             init_method=DEFAULT_INIT_METHOD,
+            lbfgs_max_iter=DEFAULT_LBFGS_MAX_ITER,
+            lbfgs_max_eval=DEFAULT_LBFGS_MAX_EVAL,
         )
     assert "seed" in str(exc_info.value)
 
