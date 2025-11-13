@@ -24,6 +24,11 @@ import style_transfer_visualizer.image_io as stv_image_io
 import style_transfer_visualizer.optimization as stv_optimization
 import style_transfer_visualizer.video as stv_video
 from style_transfer_visualizer.config import StyleTransferConfig
+from style_transfer_visualizer.constants import CSV_LOGGING_RECOMMENDED_STEPS
+from style_transfer_visualizer.loss_accumulator import (
+    DEFAULT_HISTORY_CAPACITY,
+    LoggedLoss,
+)
 
 pytestmark = pytest.mark.slow
 
@@ -112,10 +117,13 @@ def make_runner_config(
         video_section = {"save_every": 10}
         if video:
             video_section.update(video)
+        output_section = {"log_every": 1}
+        if output:
+            output_section.update(output)
         return make_style_transfer_config(
             optimization=opt_section,
             video=video_section,
-            output=output,
+            output=output_section,
             extras=extras,
         )
 
@@ -561,7 +569,7 @@ class TestOptimization:
         caplog: LogCaptureFixture,
         make_runner_config: Callable[..., StyleTransferConfig],
     ) -> None:
-        """Test that OSError is logged and no in-memory fallback occurs."""
+        """CSV logger errors are reported and bounded metrics are returned."""
         model, _, _, input_img = setup_model_and_images
         optimizer = torch.optim.Adam([input_img])
 
@@ -586,7 +594,7 @@ class TestOptimization:
 
         _img, metrics, _elapsed = runner.run()
 
-        assert metrics == {}
+        assert metrics["total_loss"], "Expect bounded in-memory metrics"
         assert "Failed to initialize CSV logging" in caplog.text
 
     def test_runner_long_run_warning_when_no_csv_logging(
@@ -615,6 +623,33 @@ class TestOptimization:
 
         assert "Long run detected" in caplog.text
 
+    def test_runner_warning_when_within_history_capacity(
+        self,
+        setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
+        caplog: LogCaptureFixture,
+        make_runner_config: Callable[..., StyleTransferConfig],
+    ) -> None:
+        """Second warning path fires when steps exceed recommendation only."""
+        model, _, _, input_img = setup_model_and_images
+        optimizer = torch.optim.Adam([input_img])
+
+        caplog.set_level("WARNING")
+
+        config = make_runner_config(
+            optimization={"steps": CSV_LOGGING_RECOMMENDED_STEPS + 10},
+            video={"save_every": 100},
+        )
+
+        stv_optimization.OptimizationRunner(
+            model,
+            input_img,
+            config,
+            optimizer=optimizer,
+        )
+
+        assert "capture every step" in caplog.text
+        assert "capped at" not in caplog.text
+
     def test_runner_callbacks_are_invoked(
         self,
         setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
@@ -627,7 +662,7 @@ class TestOptimization:
         config = make_runner_config()
 
         started: list[int] = []
-        ended: list[float] = []
+        ended: list[float | None] = []
 
         callbacks = stv_optimization.OptimizationCallbacks(
             on_step_start=lambda step: started.append(step),
@@ -646,6 +681,46 @@ class TestOptimization:
 
         assert started == [1]
         assert len(ended) == 1
+        assert ended[0] is not None
+
+    def test_step_metrics_populated_on_logging_interval(
+        self,
+        setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
+        make_runner_config: Callable[..., StyleTransferConfig],
+    ) -> None:
+        """Step metrics expose floats only when intervals trigger a sync."""
+        model, _, _, input_img = setup_model_and_images
+        optimizer = torch.optim.Adam([input_img])
+
+        config = make_runner_config(
+            optimization={"steps": 4},
+            output={"log_every": 2},
+        )
+
+        logged: list[tuple[int, bool]] = []
+
+        callbacks = stv_optimization.OptimizationCallbacks(
+            on_step_end=lambda metrics: logged.append(
+                (metrics.step, metrics.total_loss is not None),
+            ),
+        )
+
+        runner = stv_optimization.OptimizationRunner(
+            model,
+            input_img,
+            config,
+            optimizer=optimizer,
+            callbacks=callbacks,
+        )
+
+        runner.run()
+
+        assert logged == [
+            (1, False),
+            (2, True),
+            (3, False),
+            (4, True),
+        ]
 
     def test_log_optimization_summary_skips_when_no_steps(
         self,
@@ -854,12 +929,75 @@ class TestOptimization:
             optimizer=optimizer,
         )
         runner._step_index = runner.total_steps  # noqa: SLF001
-        expected_loss = 3.21
-        runner.last_loss = expected_loss
-        assert runner._closure() == expected_loss  # noqa: SLF001
+        expected_loss = torch.tensor(3.21)
+        runner._last_loss_tensor = expected_loss  # noqa: SLF001
+        result = runner._closure()  # noqa: SLF001
+        assert torch.is_tensor(result)
+        assert torch.allclose(result, expected_loss)
 
-        runner.last_loss = None
-        assert runner._closure() == 0.0  # noqa: SLF001
+        runner._last_loss_tensor = None  # noqa: SLF001
+        zero_loss = runner._closure()  # noqa: SLF001
+        assert torch.is_tensor(zero_loss)
+        assert torch.allclose(zero_loss, torch.zeros_like(zero_loss))
+
+    def test_closure_avoids_tensor_item_calls_between_flushes(
+        self,
+        setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
+        mocker: MockerFixture,
+        make_runner_config: Callable[..., StyleTransferConfig],
+    ) -> None:
+        """Ensure per-step closures do not convert tensors to Python scalars."""
+        model, _, _, input_img = setup_model_and_images
+        optimizer = torch.optim.SGD([input_img], lr=0.5)
+        config = make_runner_config(
+            optimization={"steps": 3},
+            output={"log_every": 50},
+            video={"save_every": 100},
+        )
+
+        runner = stv_optimization.OptimizationRunner(
+            model,
+            input_img,
+            config,
+            optimizer=optimizer,
+        )
+
+        def _fail_item(_: torch.Tensor) -> float:
+            raise AssertionError("tensor.item used during closure")
+
+        mocker.patch.object(torch.Tensor, "item", _fail_item)
+
+        runner.run()
+
+    def test_check_finite_emits_debug_message(
+        self,
+        setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
+        make_runner_config: Callable[..., StyleTransferConfig],
+        caplog: LogCaptureFixture,
+    ) -> None:
+        """Debug logging path emits scalar summaries."""
+        model, _, _, input_img = setup_model_and_images
+        optimizer = torch.optim.Adam([input_img])
+        config = make_runner_config()
+
+        runner = stv_optimization.OptimizationRunner(
+            model,
+            input_img,
+            config,
+            optimizer=optimizer,
+        )
+
+        caplog.set_level("DEBUG", logger="style_transfer")
+
+        ones = torch.ones((), device=input_img.device)
+        runner._check_finite(  # noqa: SLF001
+            ones,
+            ones,
+            ones,
+            step_idx=5,
+        )
+
+        assert "Step 5" in caplog.text
 
     def test_check_finite_logs_warnings(
         self,
@@ -886,7 +1024,6 @@ class TestOptimization:
             nan_tensor,
             nan_tensor,
             step_idx=5,
-            style_components=[float("nan")],
         )
 
         assert "Non-finite style score" in caplog.text
@@ -998,3 +1135,126 @@ class TestOptimization:
         assert frames == [1]
         assert len(writer.frames) == 1
         progress.set_postfix.assert_called_once()
+
+    def test_record_losses_handles_missing_accumulator(
+        self,
+        setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
+        make_runner_config: Callable[..., StyleTransferConfig],
+    ) -> None:
+        """_record_losses safely exits when accumulator is missing."""
+        model, _, _, input_img = setup_model_and_images
+        optimizer = torch.optim.Adam([input_img])
+        config = make_runner_config()
+        runner = stv_optimization.OptimizationRunner(
+            model,
+            input_img,
+            config,
+            optimizer=optimizer,
+        )
+
+        runner._loss_accumulator = None  # type: ignore[assignment]  # noqa: SLF001
+        tensors = stv_optimization.StepTensors(
+            step=1,
+            style_score=torch.tensor(1.0),
+            content_score=torch.tensor(1.0),
+            total_loss=torch.tensor(1.0),
+        )
+
+        assert runner._record_losses(tensors) is None  # noqa: SLF001
+
+    def test_update_progress_postfix_uses_latest_metrics(
+        self,
+        setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
+        make_runner_config: Callable[..., StyleTransferConfig],
+        mocker: MockerFixture,
+    ) -> None:
+        """Progress display reuses last synced values when latest metrics set."""
+        model, _, _, input_img = setup_model_and_images
+        optimizer = torch.optim.Adam([input_img])
+        progress = mocker.MagicMock()
+        config = make_runner_config()
+        runner = stv_optimization.OptimizationRunner(
+            model,
+            input_img,
+            config,
+            optimizer=optimizer,
+            progress_bar=progress,
+        )
+
+        runner._latest_logged = LoggedLoss(  # noqa: SLF001
+            step=1,
+            style_loss=1.5,
+            content_loss=2.5,
+            total_loss=3.5,
+        )
+
+        metrics = stv_optimization.StepMetrics(step=1)
+        runner._update_progress_postfix(metrics)  # noqa: SLF001
+
+        progress.set_postfix.assert_called_once_with({
+            "style": "1.5000",
+            "content": "2.5000",
+            "loss": "3.5000",
+        })
+
+    def test_update_progress_postfix_skips_when_no_values(
+        self,
+        setup_model_and_images: tuple[torch.nn.Module, Tensor, Tensor, Tensor],
+        make_runner_config: Callable[..., StyleTransferConfig],
+        mocker: MockerFixture,
+    ) -> None:
+        """No progress update occurs when no metrics are available."""
+        model, _, _, input_img = setup_model_and_images
+        optimizer = torch.optim.Adam([input_img])
+        progress = mocker.MagicMock()
+        config = make_runner_config()
+        runner = stv_optimization.OptimizationRunner(
+            model,
+            input_img,
+            config,
+            optimizer=optimizer,
+            progress_bar=progress,
+        )
+
+        empty_metrics = stv_optimization.StepMetrics(step=1)
+        runner._update_progress_postfix(empty_metrics)  # noqa: SLF001
+
+        progress.set_postfix.assert_not_called()
+
+    @pytest.mark.slow
+    def test_long_run_loss_history_is_bounded(
+        self,
+        make_runner_config: Callable[..., StyleTransferConfig],
+    ) -> None:
+        """Stress run to ensure bounded in-memory loss histories."""
+
+        class TinyModel(torch.nn.Module):
+            def forward(
+                self,
+                input_img: Tensor,
+            ) -> tuple[list[Tensor], list[Tensor]]:
+                loss = input_img.square().mean()
+                return [loss], [loss]
+
+        input_img = torch.zeros(1, 3, 8, 8, requires_grad=True)
+        optimizer = torch.optim.SGD([input_img], lr=0.05)
+        steps = DEFAULT_HISTORY_CAPACITY + 500
+        config = make_runner_config(
+            optimization={"steps": steps},
+            output={"log_every": 25},
+            video={"save_every": steps + 1},
+        )
+
+        runner = stv_optimization.OptimizationRunner(
+            TinyModel(),
+            input_img,
+            config,
+            optimizer=optimizer,
+        )
+
+        _stylized, metrics, _elapsed = runner.run()
+
+        assert len(metrics["total_loss"]) == min(
+            steps,
+            DEFAULT_HISTORY_CAPACITY,
+        )

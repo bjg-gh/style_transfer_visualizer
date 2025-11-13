@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "style-transfer-visualizer"
-version = "1.5.0-dev0"
+version = "1.5.0-dev1"
 description = "A command-line tool for neural style transfer with PyTorch"
 authors = [{ name = "Ben Goldsmith" }]
 readme = "README.md"

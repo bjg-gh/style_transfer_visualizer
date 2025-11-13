@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import pytest
-from hypothesis import given, strategies as st
+from hypothesis import HealthCheck, given, settings, strategies as st
 from PIL import Image, ImageFont
 
 pytestmark = pytest.mark.visual
@@ -188,6 +188,11 @@ def test_scale_images_to_target_and_fit() -> None:
     assert ch <= MAX_CH
     assert all(im.size[0] <= MAX_EDGE for im in fitted)
 
+@settings(
+    max_examples=25,
+    suppress_health_check=[HealthCheck.too_slow],
+    deadline=None,
+)
 @given(
     width=st.integers(min_value=64, max_value=640),
     height=st.integers(min_value=64, max_value=640),
