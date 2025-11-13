@@ -24,6 +24,8 @@ from style_transfer_visualizer.config_defaults import (
     DEFAULT_GIF_INCLUDE_INTRO,
     DEFAULT_GIF_INCLUDE_OUTRO,
     DEFAULT_INIT_METHOD,
+    DEFAULT_LBFGS_MAX_EVAL,
+    DEFAULT_LBFGS_MAX_ITER,
     DEFAULT_LEARNING_RATE,
     DEFAULT_LOG_EVERY,
     DEFAULT_NORMALIZE,
@@ -58,6 +60,8 @@ class OptimizationConfig(BaseModel):
     init_method: InitMethod = Field(DEFAULT_INIT_METHOD)
     seed: int = Field(DEFAULT_SEED, ge=0)
     normalize: bool = DEFAULT_NORMALIZE
+    lbfgs_max_iter: int = Field(DEFAULT_LBFGS_MAX_ITER, ge=1)
+    lbfgs_max_eval: int = Field(DEFAULT_LBFGS_MAX_EVAL, ge=1)
     style_layers: list[int] = Field(
         default_factory=lambda: list(DEFAULT_STYLE_LAYERS),
     )

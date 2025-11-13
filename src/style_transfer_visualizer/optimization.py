@@ -116,6 +116,9 @@ class OptimizationRunner:
 
         self._step_index = 0
         self.last_loss: float | None = None
+        self._active_step_idx: int | None = None
+        self._pending_step_metrics: StepMetrics | None = None
+        self._closure_calls = 0
 
     @property
     def progress_bar(self) -> ProgressReporter:
@@ -138,11 +141,30 @@ class OptimizationRunner:
 
         try:
             while self._step_index < self.total_steps:
-                self.optimizer.step(self._closure)  # type: ignore[arg-type]
+                step_idx = self._step_index + 1
+                self._emit_step_start(step_idx)
+                self._active_step_idx = step_idx
+                self._pending_step_metrics = None
+                try:
+                    self.optimizer.step(self._closure)  # type: ignore[arg-type]
+                finally:
+                    self._active_step_idx = None
+
+                metrics = self._pending_step_metrics
+                if metrics is None:
+                    msg = (
+                        "Optimizer closure did not record metrics "
+                        f"for step {step_idx}"
+                    )
+                    raise RuntimeError(msg)
+
+                self._finalize_step(metrics)
+                self._pending_step_metrics = None
         finally:
             self._cleanup()
 
         elapsed = time.time() - start_time
+        self._log_optimization_summary()
         return self.input_img, self.loss_metrics or {}, elapsed
 
     def _build_optimizer(
@@ -152,8 +174,13 @@ class OptimizationRunner:
         """Create an optimizer when one is not supplied."""
         if optimizer_factory is not None:
             return optimizer_factory(self.input_img)
-        lr = self.config.optimization.lr
-        return torch.optim.LBFGS([self.input_img], lr=lr)
+        opt_cfg = self.config.optimization
+        return torch.optim.LBFGS(
+            [self.input_img],
+            lr=opt_cfg.lr,
+            max_iter=opt_cfg.lbfgs_max_iter,
+            max_eval=opt_cfg.lbfgs_max_eval,
+        )
 
     def _configure_logging(self) -> None:
         """Configure loss tracking (CSV logger or in-memory metrics)."""
@@ -199,24 +226,20 @@ class OptimizationRunner:
 
     def _closure(self) -> float:
         """Optimizer closure used by LBFGS and compatible optimizers."""
+        self._closure_calls += 1
+
         if self._step_index >= self.total_steps:
             return 0.0 if self.last_loss is None else self.last_loss
 
-        step_idx = self._step_index + 1
-        self._emit_step_start(step_idx)
-
+        step_idx = self._active_step_idx or (self._step_index + 1)
         metrics = self._run_single_step(step_idx)
-        self._step_index += 1
-        self.last_loss = metrics.total_loss
-
-        self._emit_step_end(metrics)
+        self._pending_step_metrics = metrics
         return metrics.total_loss
 
     def _run_single_step(self, step_idx: int) -> StepMetrics:
         """Execute a single forward/backward update and record metrics."""
         cfg = self.config
         optimizer = self.optimizer
-        progress_bar = self.progress_bar
 
         optimizer.zero_grad()
         style_losses, content_losses = self.model(self.input_img)
@@ -250,25 +273,39 @@ class OptimizationRunner:
             step_idx,
             style_components,
         )
-        self._record_losses(step_idx, style_score, content_score, loss)
-
-        self._maybe_write_video_frame(
-            step_idx,
-            style_score,
-            content_score,
-            loss,
-        )
 
         loss_value = loss.item()
-        metrics = StepMetrics(
+        return StepMetrics(
             step=step_idx,
             style_loss=style_score.item(),
             content_loss=content_score.item(),
             total_loss=loss_value,
         )
 
-        progress_bar.update(1)
-        return metrics
+    def _finalize_step(self, metrics: StepMetrics) -> None:
+        """Record metrics and emit hooks after a successful optimizer step."""
+        self._step_index = metrics.step
+        self.last_loss = metrics.total_loss
+
+        self._record_losses(metrics)
+        self._maybe_write_video_frame(metrics)
+        self.progress_bar.update(1)
+        self._emit_step_end(metrics)
+
+    def _log_optimization_summary(self) -> None:
+        """Log how many closure evaluations were consumed per accepted step."""
+        if self._step_index <= 0:
+            return
+        avg_closures = self._closure_calls / self._step_index
+        logger.info(
+            (
+                "Optimization finished with %d accepted steps and %d closure "
+                "evaluations (%.2f closures/step)."
+            ),
+            self._step_index,
+            self._closure_calls,
+            avg_closures,
+        )
 
     def _check_finite(
         self,
@@ -297,38 +334,27 @@ class OptimizationRunner:
             total_loss.item(),
         )
 
-    def _record_losses(
-        self,
-        step_idx: int,
-        style_score: torch.Tensor,
-        content_score: torch.Tensor,
-        total_loss: torch.Tensor,
-    ) -> None:
+    def _record_losses(self, metrics: StepMetrics) -> None:
         """Persist loss metrics to CSV or in-memory buffers."""
         if self.loss_metrics is not None:
-            self.loss_metrics["style_loss"].append(style_score.item())
-            self.loss_metrics["content_loss"].append(content_score.item())
-            self.loss_metrics["total_loss"].append(total_loss.item())
+            self.loss_metrics["style_loss"].append(metrics.style_loss)
+            self.loss_metrics["content_loss"].append(metrics.content_loss)
+            self.loss_metrics["total_loss"].append(metrics.total_loss)
 
         if self.loss_logger is not None:
             self.loss_logger.log(
-                step_idx,
-                style_score.item(),
-                content_score.item(),
-                total_loss.item(),
+                metrics.step,
+                metrics.style_loss,
+                metrics.content_loss,
+                metrics.total_loss,
             )
 
-    def _maybe_write_video_frame(
-        self,
-        step_idx: int,
-        style_score: torch.Tensor,
-        content_score: torch.Tensor,
-        total_loss: torch.Tensor,
-    ) -> None:
+    def _maybe_write_video_frame(self, metrics: StepMetrics) -> None:
         """Write a timelapse frame when configured to do so."""
         save_every = self.config.video.save_every
         video_writer = self.video_writer
         gif_collector = self.gif_collector
+        step_idx = metrics.step
 
         if (
             not save_every
@@ -385,9 +411,9 @@ class OptimizationRunner:
         if gif_collector is not None:
             gif_collector.append_data(img_np)
         self.progress_bar.set_postfix({
-            "style": f"{style_score.item():.4f}",
-            "content": f"{content_score.item():.4f}",
-            "loss": f"{total_loss.item():.4f}",
+            "style": f"{metrics.style_loss:.4f}",
+            "content": f"{metrics.content_loss:.4f}",
+            "loss": f"{metrics.total_loss:.4f}",
         })
 
         if self.callbacks.on_video_frame is not None:

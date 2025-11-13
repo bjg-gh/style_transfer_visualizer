@@ -420,7 +420,7 @@ def test_auto_postprocess_reason_high_res() -> None:
 
     reason, frames = stv_video._auto_postprocess_reason(  # noqa: SLF001
         cfg,
-        frame_size=(1920, 1080),
+        frame_size=(2560, 1440),
         total_steps=total_steps,
     )
 

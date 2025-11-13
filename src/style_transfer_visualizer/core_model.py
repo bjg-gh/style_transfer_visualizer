@@ -341,5 +341,10 @@ def prepare_model_and_input(
     ).to(device)
     model.set_targets(style_img, content_img)
     input_img = initialize_input(content_img, optimization.init_method)
-    optimizer = torch.optim.LBFGS([input_img], lr=optimization.lr)
+    optimizer = torch.optim.LBFGS(
+        [input_img],
+        lr=optimization.lr,
+        max_iter=optimization.lbfgs_max_iter,
+        max_eval=optimization.lbfgs_max_eval,
+    )
     return model, input_img, optimizer
