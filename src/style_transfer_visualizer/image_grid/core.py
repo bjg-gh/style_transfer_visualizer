@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Literal
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
+from style_transfer_visualizer import random_utils as stv_random
 from style_transfer_visualizer.constants import (
     COLOR_BEIGE,
     COLOR_BLACK,
@@ -514,16 +516,39 @@ def make_wall_canvas(
         )
 
     if noise:
-        noise_small = Image.effect_noise(
-            (max(1, w // 4), max(1, h // 4)), _NOISE_EFFECT_SCALE,
+        noise_small = _gaussian_noise_image(
+            (max(1, w // 4), max(1, h // 4)),
+            sigma=_NOISE_EFFECT_SCALE,
+            rng=stv_random.get_numpy_rng(),
         )
         noise_big = noise_small.resize(
-            (w, h), Image.Resampling.BILINEAR,
+            (w, h),
+            Image.Resampling.BILINEAR,
         ).filter(ImageFilter.GaussianBlur(radius=_NOISE_GAUSS_RADIUS))
         texture = ImageOps.colorize(noise_big, (0, 0, 0), color)
         wall = Image.blend(wall, texture, 0.05)
 
     return wall
+
+
+def _gaussian_noise_image(
+    size: tuple[int, int],
+    *,
+    sigma: float,
+    rng: np.random.Generator | None = None,
+) -> Image.Image:
+    """Return a grayscale noise image generated via the shared RNG."""
+    width, height = size
+    eff_width = max(1, int(width))
+    eff_height = max(1, int(height))
+    generator = rng or stv_random.get_numpy_rng()
+    samples = generator.normal(
+        loc=127.5,
+        scale=float(sigma),
+        size=(eff_height, eff_width),
+    )
+    clipped = np.clip(np.rint(samples), 0, 255).astype(np.uint8)
+    return Image.fromarray(clipped, mode="L")
 
 
 def _add_frame_texture(
@@ -538,8 +563,13 @@ def _add_frame_texture(
     base_rgb = frame_img.convert("RGB")
 
     w, h = base_rgb.size
-    streaks = Image.effect_noise((w // 3 or 1, 1), 25.0).resize(
-        (w, h), Image.Resampling.BILINEAR,
+    streaks = _gaussian_noise_image(
+        (max(1, w // 3), 1),
+        sigma=25.0,
+        rng=stv_random.get_numpy_rng(),
+    ).resize(
+        (w, h),
+        Image.Resampling.BILINEAR,
     )
     streaks = streaks.filter(ImageFilter.GaussianBlur(radius=1))
     streaks_rgb = ImageOps.colorize(streaks, COLOR_BLACK, COLOR_WHITE)

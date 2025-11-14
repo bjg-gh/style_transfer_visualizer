@@ -5,9 +5,11 @@ from __future__ import annotations
 import logging
 import random
 
+import numpy as np
 import pytest
 import torch
 
+from style_transfer_visualizer import random_utils as stv_random
 from style_transfer_visualizer.runtime import device as runtime_device
 
 
@@ -59,10 +61,13 @@ def test_setup_random_seed_deterministic(
     runtime_device.setup_random_seed(123)
     torch_first = torch.rand(2)
     py_first = [random.random() for _ in range(2)]
+    np_first = stv_random.get_numpy_rng().random(2)
 
     runtime_device.setup_random_seed(123)
     torch_second = torch.rand(2)
     py_second = [random.random() for _ in range(2)]
+    np_second = stv_random.get_numpy_rng().random(2)
 
     assert torch.allclose(torch_first, torch_second)
     assert py_first == py_second
+    assert np.array_equal(np_first, np_second)

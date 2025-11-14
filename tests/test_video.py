@@ -14,6 +14,7 @@ from PIL import Image
 import style_transfer_visualizer.video as stv_video
 from style_transfer_visualizer.config import VideoConfig
 from style_transfer_visualizer.config_defaults import DEFAULT_VIDEO_QUALITY
+from style_transfer_visualizer.runtime import device as runtime_device
 from style_transfer_visualizer.type_defs import VideoMode
 
 pytestmark = pytest.mark.visual
@@ -746,6 +747,76 @@ def test_prepare_intro_segment_skips_gif_when_not_requested(
     )
     assert result is None
     assert gif_writer.frames == []
+
+
+def test_seeded_intro_and_outro_deterministic(
+    content_image: Path,
+    style_image: Path,
+) -> None:
+    """Intro/outro helpers should honor the shared RNG seed."""
+    intro_cfg = VideoConfig(
+        fps=12,
+        quality=5,
+        save_every=1,
+        create_video=True,
+        create_gif=False,
+        intro_enabled=True,
+        intro_duration_seconds=0.1,
+        outro_duration_seconds=DEFAULT_OUTRO_DURATION,
+        mode="realtime",
+    )
+    outro_cfg = VideoConfig(
+        fps=12,
+        quality=5,
+        save_every=1,
+        create_video=True,
+        create_gif=False,
+        final_frame_compare=True,
+        intro_duration_seconds=DEFAULT_INTRO_DURATION,
+        outro_duration_seconds=0.1,
+        mode="realtime",
+    )
+    paths = (content_image, style_image)
+
+    def render_intro() -> tuple[np.ndarray, int, list[np.ndarray]]:
+        writer = DummyWriter()
+        info = stv_video.prepare_intro_segment(intro_cfg, writer, paths)
+        assert info is not None
+        frame, crossfade = info
+        captured = [frame.copy() for frame in writer.frames]
+        return frame.copy(), crossfade, captured
+
+    def render_outro() -> list[np.ndarray]:
+        writer = DummyWriter()
+        last_frame = np.zeros((64, 64, 3), dtype=np.uint8)
+        stv_video.append_final_comparison_frame(
+            outro_cfg,
+            writer,
+            paths,
+            last_frame,
+        )
+        return [frame.copy() for frame in writer.frames]
+
+    runtime_device.setup_random_seed(777)
+    intro_first = render_intro()
+    runtime_device.setup_random_seed(777)
+    intro_second = render_intro()
+
+    np.testing.assert_array_equal(intro_first[0], intro_second[0])
+    assert intro_first[1] == intro_second[1]
+    assert len(intro_first[2]) == len(intro_second[2])
+    for left, right in zip(intro_first[2], intro_second[2], strict=True):
+        np.testing.assert_array_equal(left, right)
+
+    runtime_device.setup_random_seed(777)
+    outro_first = render_outro()
+    runtime_device.setup_random_seed(777)
+    outro_second = render_outro()
+
+    assert outro_first, "Expected outro frames when comparison is enabled."
+    assert len(outro_first) == len(outro_second)
+    for left, right in zip(outro_first, outro_second, strict=True):
+        np.testing.assert_array_equal(left, right)
 
 
 def test_append_crossfade_handles_zero_frame_count() -> None:

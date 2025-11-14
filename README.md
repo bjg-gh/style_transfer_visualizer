@@ -117,6 +117,18 @@ intro/outro overlays unless you opt in with `--gif-include-intro` or
 
 ---
 
+### Deterministic Seeds
+
+Passing `--seed N` or configuring `optimization.seed = N` runs the entire
+pipeline deterministically. The runtime seeds PyTorch (CPU/CUDA), Python's
+`random` module, and a shared NumPy `Generator` that powers the intro/outro
+gallery walls and GIF helpers. Two invocations with the same seed will render
+identical comparison frames, crossfades, and timelapse streams. Seed once during
+startup—calling the helper multiple times re-initializes every RNG to keep
+tests reproducible.
+
+---
+
 ## Video Intro & Outro Segments
 
 Every timelapse now starts and ends with comparison sequences by default.

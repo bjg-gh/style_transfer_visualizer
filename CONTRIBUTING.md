@@ -145,8 +145,9 @@ changes so the label can follow.
 - Use `@pytest.mark.integration` for tests that depend on external binaries,
   large fixtures, or network access.
 - Snapshot new CLI text output so regressions show up automatically.
-- Seed randomness (`torch.manual_seed`, `random.seed`) whenever determinism is
-  required for tests or image generation.
+- Use `style_transfer_visualizer.runtime.device.setup_random_seed(value)` to
+  seed PyTorch, Python's `random`, and the shared NumPy `Generator` whenever a
+  deterministic test or rendered asset is required.
 
 Helpful pytest flags while iterating:
 

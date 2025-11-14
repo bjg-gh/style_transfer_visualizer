@@ -6,6 +6,7 @@ import random
 
 import torch
 
+from style_transfer_visualizer import random_utils as stv_random
 from style_transfer_visualizer.logging_utils import logger
 
 
@@ -32,11 +33,13 @@ def setup_random_seed(seed: int) -> None:
     """
     Seed all supported random number generators for determinism.
 
-    Currently seeds torch (CPU and CUDA) and Python's ``random`` module. Extend
-    this helper if additional frameworks are introduced (e.g., NumPy).
+    Currently seeds torch (CPU and CUDA), NumPy, and Python's
+    ``random`` module. Extend this helper if additional frameworks
+    are introduced.
     """
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
     random.seed(seed)
+    stv_random.seed_numpy_rng(seed)
