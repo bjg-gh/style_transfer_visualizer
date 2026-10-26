@@ -13,8 +13,11 @@ This guide captures the path so collaborators can plug in without surprises.
 
 ```bash
 uv venv --python=3.12
-uv sync --extra dev --extra cu128  # use --extra cpu on machines without CUDA
+uv sync --extra dev --extra cu126  # use --extra cpu on machines without CUDA
 ```
+
+Existing GPU users must change `--extra cu128` to `--extra cu126` in their
+installation commands and scripts, then rerun `uv sync` with the new extra name.
 
 If you want to activate the virtual environment before running commands:
 

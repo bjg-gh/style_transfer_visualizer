@@ -10,6 +10,15 @@
 
 - _None yet._
 
+### Planned dependency updates (#105)
+
+- Upgrade PyTorch to 2.13.0 and torchvision to 0.28.0, and require
+  setuptools 84.1.0 or later to address the remaining dependency advisories.
+- Rename the GPU extra from `cu128` to `cu126` to use the CUDA 12.6 builds.
+  When this change lands, existing GPU users must replace `--extra cu128`
+  with `--extra cu126` in installation commands and scripts, then rerun
+  `uv sync --extra cu126 --extra dev`.
+
 ## v1.4.0 - 2025-11-06
 
 **Milestone:** v1.4 Testing & Coverage

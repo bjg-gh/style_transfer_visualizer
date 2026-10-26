@@ -37,8 +37,11 @@ Set up your environment with uv (<https://docs.astral.sh/uv/>) and Python 3.12:
 
 ```bash
 uv venv --python=3.12
-uv sync --extra cu128 --extra dev
+uv sync --extra cu126 --extra dev
 ```
+
+Existing GPU users must change `--extra cu128` to `--extra cu126` in their
+installation commands and scripts, then rerun `uv sync` with the new extra name.
 
 ---
 

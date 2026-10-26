@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=83"]
+requires = ["setuptools>=84.1.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "style-transfer-visualizer"
-version = "1.5.0-dev1"
+version = "1.5.0-dev2"
 description = "A command-line tool for neural style transfer with PyTorch"
 authors = [{ name = "Ben Goldsmith" }]
 readme = "README.md"
@@ -23,12 +23,12 @@ dependencies = [
 
 [project.optional-dependencies]
 cpu = [
-    "torch",
-    "torchvision"
+    "torch>=2.13.0",
+    "torchvision>=0.28.0"
 ]
-cu128  = [
-    "torch",
-    "torchvision"
+cu126  = [
+    "torch>=2.13.0",
+    "torchvision>=0.28.0"
 ]
 dev = [
     "pytest",
@@ -41,6 +41,7 @@ dev = [
 ]
 
 [tool.uv]
+constraint-dependencies = ["setuptools>=84.1.0"]
 required-environments = [
   "sys_platform == 'linux' and platform_machine == 'x86_64'",
   "sys_platform == 'win32' and platform_machine == 'AMD64'",
@@ -48,18 +49,18 @@ required-environments = [
 conflicts = [
   [
     { extra = "cpu" },
-    { extra = "cu128" },
+    { extra = "cu126" },
   ],
 ]
 
 [tool.uv.sources]
 torch = [
   { index = "pytorch-cpu", extra = "cpu" },
-  { index = "pytorch-cu128", extra = "cu128" },
+  { index = "pytorch-cu126", extra = "cu126" },
 ]
 torchvision = [
   { index = "pytorch-cpu", extra = "cpu" },
-  { index = "pytorch-cu128", extra = "cu128" },
+  { index = "pytorch-cu126", extra = "cu126" },
 ]
 
 [[tool.uv.index]]
@@ -68,8 +69,8 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [[tool.uv.index]]
-name = "pytorch-cu128"
-url = "https://download.pytorch.org/whl/cu128"
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
 explicit = true
 
 [project.scripts]
